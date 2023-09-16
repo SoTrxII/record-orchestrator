@@ -9,3 +9,6 @@ dapr_run:
 
 dapr:
 	dapr run --app-id=record-orchestrator --app-protocol=grpc --app-port 55555 --dapr-grpc-port 50011  --resources-path ./dapr/components
+
+test:
+	go test -v ./... -covermode=atomic -coverprofile=coverage.out
