@@ -4,18 +4,20 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"log/slog"
-	"record-orchestrator/internal/utils"
+	"record-orchestrator/pkg/memory"
+	"record-orchestrator/pkg/pandora"
+	roll20_sync "record-orchestrator/pkg/roll20-sync"
 	pb "record-orchestrator/proto"
 )
 
 type Recorder struct {
-	pandora    utils.DiscordRecorder
-	roll20Sync utils.R20Recorder
-	memory     StateStore
+	pandora    pandora.DiscordRecorder
+	roll20Sync roll20_sync.R20Recorder
+	memory     memory.StateStore
 	stateKey   string
 }
 
-func NewRecorder(pandora utils.DiscordRecorder, r20 utils.R20Recorder, memory StateStore) *Recorder {
+func NewRecorder(pandora pandora.DiscordRecorder, r20 roll20_sync.R20Recorder, memory memory.StateStore) *Recorder {
 	return &Recorder{
 		pandora:    pandora,
 		roll20Sync: r20,
@@ -38,7 +40,7 @@ func (r *Recorder) Start(payload *pb.StartRecordRequest) (*pb.StartRecordReply, 
 		return nil, fmt.Errorf("[Recorder] :: already recording")
 	}
 
-	state = &State{
+	state = &memory.State{
 		VcId:  "",
 		R20Id: "",
 	}

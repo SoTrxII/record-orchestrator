@@ -1,5 +1,10 @@
 package pandora
 
+type DiscordRecorder interface {
+	Start(vcId string) error
+	Stop(vcId string) ([]string, error)
+}
+
 type topics string
 
 const (

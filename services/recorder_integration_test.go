@@ -1,5 +1,5 @@
-//dgo:build integration
-// dcxxcxc xfffddf + build integration
+//go:build integration
+// +build integration
 
 package services
 

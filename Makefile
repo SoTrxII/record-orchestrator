@@ -12,3 +12,6 @@ dapr:
 
 test:
 	go test -v ./... -covermode=atomic -coverprofile=coverage.out
+
+mocks:
+	mockery

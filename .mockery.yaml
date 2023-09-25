@@ -1,0 +1,16 @@
+quiet: False
+disable-version-string: True
+with-expecter: True
+dir: "test-utils"
+filename: "{{.MockName}}.go"
+outpkg: test_utils
+packages:
+  record-orchestrator/pkg/pandora:
+    interfaces:
+      DiscordRecorder:
+  record-orchestrator/pkg/roll20-sync:
+    interfaces:
+      R20Recorder:
+  record-orchestrator/pkg/memory:
+    interfaces:
+      StateStore:
