@@ -92,7 +92,7 @@ func DI(subServer common.Service, daprPort int) (*services.Recorder, error) {
 	}
 
 	// State store
-	store := memory.NewMemory[services.State](daprClient, DEFAULT_STATE_STORE_ID)
+	store := memory.NewMemory[memory.State](daprClient, DEFAULT_STATE_STORE_ID)
 	// Recorders themselves
 	pandora, err := pando.NewPandora(daprClient, subServer, DEFAULT_PANDORA_ID, pando.PandoraOpt{})
 	if err != nil {
