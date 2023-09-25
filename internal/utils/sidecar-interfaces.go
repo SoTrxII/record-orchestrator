@@ -20,3 +20,11 @@ type DataContent = dapr.DataContent
 type Invoker interface {
 	InvokeMethodWithContent(ctx context.Context, appID, method, verb string, content *DataContent) ([]byte, error)
 }
+
+type StateOption = dapr.StateOption
+type StateItem = dapr.StateItem
+type StateSaver interface {
+	GetState(ctx context.Context, storeName string, key string, meta map[string]string) (item *StateItem, err error)
+	SaveState(ctx context.Context, storeName string, key string, data []byte, meta map[string]string, so ...StateOption) error
+	DeleteState(ctx context.Context, storeName string, key string, meta map[string]string) error
+}

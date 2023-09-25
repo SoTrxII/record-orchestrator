@@ -11,7 +11,7 @@ import (
 func TestRecorder_StartOnlyPandora(t *testing.T) {
 	pandora := MockPandora{}
 	r20Rec := MockR20Recorder{}
-	recorder := NewRecorder(&pandora, &r20Rec)
+	recorder := NewRecorder(&pandora, &r20Rec, nil)
 	pandora.On("Start", "1").Return(nil)
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1"})
 	assert.Equal(t, &pb.StartRecordReply{Discord: true, Roll20: false}, ret)
@@ -25,7 +25,7 @@ func TestRecorder_StartOnlyPandora(t *testing.T) {
 func TestRecorder_StartPandoraAndRoll20(t *testing.T) {
 	pandora := MockPandora{}
 	r20Rec := MockR20Recorder{}
-	recorder := NewRecorder(&pandora, &r20Rec)
+	recorder := NewRecorder(&pandora, &r20Rec, nil)
 	pandora.On("Start", "1").Return(nil)
 	r20Rec.On("Start", "2").Return(nil)
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
@@ -65,4 +65,18 @@ func (m *MockR20Recorder) Start(r20Id string) error {
 func (m *MockR20Recorder) Stop(r20Id string) (string, error) {
 	args := m.Called(r20Id)
 	return args.String(0), args.Error(1)
+}
+
+type MockStateStore struct {
+	mock.Mock
+}
+
+func (m *MockStateStore) Save(key string, value bool) error {
+	args := m.Called(key, value)
+	return args.Error(0)
+}
+
+func (m *MockStateStore) Get(key string) (bool, error) {
+	args := m.Called(key)
+	return args.Bool(0), args.Error(1)
 }

@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"record-orchestrator/pkg/memory"
 	pando "record-orchestrator/pkg/pandora"
 	roll20_sync "record-orchestrator/pkg/roll20-sync"
 	pb "record-orchestrator/proto"
@@ -24,8 +25,9 @@ const (
 	DEFAULT_DAPR_PORT = 50001
 	// Dapr services app ids
 	// TODO :: Move these to env vars
-	DEFAULT_PANDORA_ID = "pandora"
-	DEFAULT_R20_ID     = "r20-audio-bouncer"
+	DEFAULT_PANDORA_ID     = "pandora"
+	DEFAULT_R20_ID         = "r20-audio-bouncer"
+	DEFAULT_STATE_STORE_ID = "state-store"
 )
 
 var (
@@ -89,13 +91,15 @@ func DI(subServer common.Service, daprPort int) (*services.Recorder, error) {
 		return nil, err
 	}
 
+	// State store
+	store := memory.NewMemory[services.State](daprClient, DEFAULT_STATE_STORE_ID)
 	// Recorders themselves
 	pandora, err := pando.NewPandora(daprClient, subServer, DEFAULT_PANDORA_ID, pando.PandoraOpt{})
 	if err != nil {
 		return nil, err
 	}
 	r20 := roll20_sync.NewRoll20Sync(daprClient, DEFAULT_R20_ID)
-	return services.NewRecorder(pandora, r20), nil
+	return services.NewRecorder(pandora, r20, store), nil
 }
 
 func makeDaprClient(port, maxRequestSizeMB int) (client.Client, error) {

@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+//dgo:build integration
+// dcxxcxc xfffddf + build integration
 
 package services
 
@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"record-orchestrator/pkg/memory"
 	"record-orchestrator/pkg/pandora"
 	roll20_sync "record-orchestrator/pkg/roll20-sync"
 	pb "record-orchestrator/proto"
@@ -21,10 +22,13 @@ import (
 )
 
 const (
-	SERVER_PORT    = 55555
-	DAPR_PORT      = 50011
-	TEST_ROLL20_ID = "2"
-	TEST_CHANNEL   = "416228669095411717"
+	SERVER_PORT            = 55555
+	DAPR_PORT              = 50011
+	DEFAULT_STATE_STORE_ID = "state-store"
+	DEFAULT_PUBSUB_ID      = "pubsub"
+	DEFAULT_ROLL20_ID      = "r20-audio-bouncer"
+	TEST_ROLL20_ID         = "2"
+	TEST_CHANNEL           = "416228669095411717"
 )
 
 var (
@@ -48,14 +52,15 @@ func beforeAll() net.Listener {
 		log.Fatalf("error creating dapr client: %v", err)
 	}
 	daprClient := client.NewClientWithConnection(conn)
-
+	// State store
+	store := memory.NewMemory[State](daprClient, DEFAULT_STATE_STORE_ID)
 	// Recorders themselves
-	pandora, err := pandora.NewPandora(daprClient, subServer, "pubsub", pandora.PandoraOpt{})
+	pandora, err := pandora.NewPandora(daprClient, subServer, DEFAULT_PUBSUB_ID, pandora.PandoraOpt{})
 	if err != nil {
 		log.Fatalf("error creating dapr client: %v", err)
 	}
-	r20 := roll20_sync.NewRoll20Sync(daprClient)
-	recorder = NewRecorder(pandora, r20)
+	r20 := roll20_sync.NewRoll20Sync(daprClient, DEFAULT_ROLL20_ID)
+	recorder = NewRecorder(pandora, r20, store)
 
 	// Start the server
 	go func() {
@@ -67,41 +72,41 @@ func beforeAll() net.Listener {
 }
 
 func TestRecorder_PandoraOnly(t *testing.T) {
-	err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL})
+	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL})
 	assert.NoError(t, err)
 
-	// TODO :: Pandora is kinda weak against a double start, The recording state should be stored in a state
-	/*err = recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL})
-	assert.Error(t, err)*/
+	_, err = recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL})
+	assert.Error(t, err)
 
 	time.Sleep(5 * time.Second)
-	err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL})
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL})
 	assert.NoError(t, err)
 
-	// TODO :: The double stop is correctly denied but
-	// doesn't return anything
 	time.Sleep(5 * time.Second)
-	err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL})
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL})
 	assert.Error(t, err)
 }
 
 func TestRecorder_PandoraAndSyncer(t *testing.T) {
-	err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
+	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
 	assert.NoError(t, err)
 
-	// TODO :: Pandora is kinda weak against a double start
-	/*err = recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "416228669095411717"})
-	assert.Error(t, err)*/
+	_, err = recorder.Start(&pb.StartRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
+	assert.Error(t, err)
+
+	// Wrong parameters
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "1", Roll20GameId: TEST_ROLL20_ID})
+	assert.Error(t, err)
+
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL})
+	assert.Error(t, err)
 
 	time.Sleep(5 * time.Second)
-	err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
 	assert.NoError(t, err)
 
-	// TODO :: The double stop is correctly denied but
-	// doesn't return anything
-	//time.Sleep(5 * time.Second)
-	// err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
-	//assert.Error(t, err)
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: TEST_CHANNEL, Roll20GameId: TEST_ROLL20_ID})
+	assert.Error(t, err)
 }
 
 func TestMain(m *testing.M) {
