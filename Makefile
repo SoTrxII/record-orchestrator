@@ -5,7 +5,7 @@ proto:
 
 
 dapr_run:
-	dapr run --app-id=record-orchestrator --app-port 55555 --dapr-grpc-port 50011 --resources-path ./dapr/components -- go run cmd/server.go
+	dapr run --app-id=record-orchestrator --app-protocol=grpc --app-port 55555 --dapr-grpc-port 50011 --resources-path ./dapr/components -- go run cmd/server.go
 
 dapr:
 	dapr run --app-id=record-orchestrator --app-protocol=grpc --app-port 55555 --dapr-grpc-port 50011  --resources-path ./dapr/components
