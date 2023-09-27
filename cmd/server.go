@@ -26,7 +26,7 @@ const (
 	// Dapr services app ids
 	// TODO :: Move these to env vars
 	DEFAULT_PUBSUB_ID      = "pubsub"
-	DEFAULT_R20_ID         = "r20-audio-bouncer"
+	DEFAULT_R20_ID         = "roll20-audio-sync"
 	DEFAULT_STATE_STORE_ID = "statestore"
 )
 
