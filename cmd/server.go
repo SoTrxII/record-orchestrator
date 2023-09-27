@@ -25,7 +25,7 @@ const (
 	DEFAULT_DAPR_PORT = 50001
 	// Dapr services app ids
 	// TODO :: Move these to env vars
-	DEFAULT_PANDORA_ID     = "pandora"
+	DEFAULT_PUBSUB_ID      = "pubsub"
 	DEFAULT_R20_ID         = "r20-audio-bouncer"
 	DEFAULT_STATE_STORE_ID = "statestore"
 )
@@ -101,7 +101,7 @@ func parseEnv() *env {
 	pEnv := env{
 		serverPort:     DEFAULT_PORT,
 		daprGrpcPort:   DEFAULT_DAPR_PORT,
-		daprCpnPandora: DEFAULT_PANDORA_ID,
+		daprCpnPandora: DEFAULT_PUBSUB_ID,
 		daprCpnR20:     DEFAULT_R20_ID,
 		daprCpnState:   DEFAULT_STATE_STORE_ID,
 	}
@@ -111,7 +111,7 @@ func parseEnv() *env {
 	if envPort, err := strconv.ParseInt(os.Getenv("SERVER_PORT"), 10, 32); err == nil && envPort != 0 {
 		pEnv.serverPort = int(envPort)
 	}
-	if id, isDefined := os.LookupEnv("PANDORA_NAME"); isDefined && id != "" {
+	if id, isDefined := os.LookupEnv("PUBSUB_NAME"); isDefined && id != "" {
 		pEnv.daprCpnPandora = id
 	}
 	if id, isDefined := os.LookupEnv("ROLL20_NAME"); isDefined && id != "" {
@@ -134,7 +134,7 @@ func DI(subServer common.Service, daprPort int) (*services.Recorder, error) {
 	// State store
 	store := memory.NewMemory[memory.State](daprClient, DEFAULT_STATE_STORE_ID)
 	// Recorders themselves
-	pandora, err := pando.NewPandora(daprClient, subServer, DEFAULT_PANDORA_ID, pando.PandoraOpt{})
+	pandora, err := pando.NewPandora(daprClient, subServer, DEFAULT_PUBSUB_ID, pando.PandoraOpt{})
 	if err != nil {
 		return nil, err
 	}
