@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
 	"github.com/dapr/go-sdk/service/common"
@@ -22,16 +21,13 @@ import (
 )
 
 const (
+	DEFAULT_PORT      = 55555
 	DEFAULT_DAPR_PORT = 50001
 	// Dapr services app ids
 	// TODO :: Move these to env vars
 	DEFAULT_PANDORA_ID     = "pandora"
 	DEFAULT_R20_ID         = "r20-audio-bouncer"
-	DEFAULT_STATE_STORE_ID = "state-store"
-)
-
-var (
-	port = flag.Int("port", 55555, "The server port")
+	DEFAULT_STATE_STORE_ID = "statestore"
 )
 
 type server struct {
@@ -58,20 +54,18 @@ func (s *server) Stop(ctx context.Context, req *pb.StopRecordRequest) (*pb.StopR
 }
 
 func main() {
-	daprPort := DEFAULT_DAPR_PORT
-	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err == nil && envPort != 0 {
-		daprPort = int(envPort)
-	}
-	slog.Info("[Main] :: Dapr port is " + strconv.Itoa(daprPort))
+	pEnv := parseEnv()
+	slog.Info("[Main] :: Dapr port is " + strconv.Itoa(pEnv.daprGrpcPort))
+	slog.Info(fmt.Sprintf("[Main] :: Parsed env %+v", pEnv))
 
 	// Strat the gRPC Server
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", pEnv.serverPort))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	daprServer := daprd.NewServiceWithGrpcServer(lis, s)
-	recorder, err := DI(daprServer, daprPort)
+	recorder, err := DI(daprServer, pEnv.daprGrpcPort)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize event controller: %w", err))
 	}
@@ -82,6 +76,44 @@ func main() {
 		log.Fatalf("server error: %v", err)
 	}
 
+}
+
+type env struct {
+	// Port to connect to Dapr sidecar
+	daprGrpcPort int
+	// Port the app is listening on
+	serverPort int
+	// Dapr components ids
+	daprCpnPandora string
+	daprCpnR20     string
+	daprCpnState   string
+}
+
+func parseEnv() *env {
+	pEnv := env{
+		serverPort:     DEFAULT_PORT,
+		daprGrpcPort:   DEFAULT_DAPR_PORT,
+		daprCpnPandora: DEFAULT_PANDORA_ID,
+		daprCpnR20:     DEFAULT_R20_ID,
+		daprCpnState:   DEFAULT_STATE_STORE_ID,
+	}
+	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err == nil && envPort != 0 {
+		pEnv.daprGrpcPort = int(envPort)
+	}
+	if envPort, err := strconv.ParseInt(os.Getenv("SERVER_PORT"), 10, 32); err == nil && envPort != 0 {
+		pEnv.serverPort = int(envPort)
+	}
+	if id, isDefined := os.LookupEnv("PANDORA_NAME"); isDefined && id != "" {
+		pEnv.daprCpnPandora = id
+	}
+	if id, isDefined := os.LookupEnv("ROLL20_NAME"); isDefined && id != "" {
+		pEnv.daprCpnR20 = id
+	}
+	if id, isDefined := os.LookupEnv("STORE_NAME"); isDefined && id != "" {
+		pEnv.daprCpnState = id
+	}
+
+	return &pEnv
 }
 
 func DI(subServer common.Service, daprPort int) (*services.Recorder, error) {
