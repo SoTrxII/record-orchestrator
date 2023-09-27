@@ -41,7 +41,11 @@ func (s *server) Start(ctx context.Context, req *pb.StartRecordRequest) (*pb.Sta
 	}
 
 	slog.Info(fmt.Sprintf("[Server] :: Starting a new record with params %+v", req))
-	return s.service.Start(req)
+	reply, err := s.service.Start(req)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[Server] :: Error starting a new record with params %+v, %s", req, err.Error()))
+	}
+	return reply, err
 }
 
 func (s *server) Stop(ctx context.Context, req *pb.StopRecordRequest) (*pb.StopRecordReply, error) {
@@ -50,7 +54,11 @@ func (s *server) Stop(ctx context.Context, req *pb.StopRecordRequest) (*pb.StopR
 	}
 
 	slog.Info(fmt.Sprintf("[Server] :: Starting a new record with params %+v", req))
-	return s.service.Stop(req)
+	reply, err := s.service.Stop(req)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[Server] :: Error starting a new record with params %+v, %s", req, err.Error()))
+	}
+	return reply, err
 }
 
 func main() {
