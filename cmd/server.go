@@ -53,10 +53,10 @@ func (s *server) Stop(ctx context.Context, req *pb.StopRecordRequest) (*pb.StopR
 		return nil, fmt.Errorf("voice channel id is required")
 	}
 
-	slog.Info(fmt.Sprintf("[Server] :: Starting a new record with params %+v", req))
+	slog.Info(fmt.Sprintf("[Server] :: Stopping record with params %+v", req))
 	reply, err := s.service.Stop(req)
 	if err != nil {
-		slog.Error(fmt.Sprintf("[Server] :: Error starting a new record with params %+v, %s", req, err.Error()))
+		slog.Error(fmt.Sprintf("[Server] ::  Stopping record with params %+v, %s", req, err.Error()))
 	}
 	return reply, err
 }
