@@ -22,8 +22,6 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RecordServiceClient interface {
-	// Stream of events.
-	// rpc Watch(WatchRequest) returns (stream ProcessingStatus) ;
 	Start(ctx context.Context, in *StartRecordRequest, opts ...grpc.CallOption) (*StartRecordReply, error)
 	Stop(ctx context.Context, in *StopRecordRequest, opts ...grpc.CallOption) (*StopRecordReply, error)
 }
@@ -58,8 +56,6 @@ func (c *recordServiceClient) Stop(ctx context.Context, in *StopRecordRequest, o
 // All implementations must embed UnimplementedRecordServiceServer
 // for forward compatibility
 type RecordServiceServer interface {
-	// Stream of events.
-	// rpc Watch(WatchRequest) returns (stream ProcessingStatus) ;
 	Start(context.Context, *StartRecordRequest) (*StartRecordReply, error)
 	Stop(context.Context, *StopRecordRequest) (*StopRecordReply, error)
 	mustEmbedUnimplementedRecordServiceServer()

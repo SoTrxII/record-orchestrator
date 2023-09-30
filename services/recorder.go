@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"log/slog"
 	"record-orchestrator/pkg/memory"
 	"record-orchestrator/pkg/pandora"
@@ -106,11 +105,9 @@ func (r *Recorder) Stop(payload *pb.StopRecordRequest) (*pb.StopRecordReply, err
 		return nil, err
 	}
 
-	uuid := uuid.New().String()
-
-	// TODO :: Enqueue record processing, return jobId to caller
-	_ = uuid
-	_ = r20Key
-	_ = ids
-	return &pb.StopRecordReply{JobId: uuid}, nil
+	// TODO :: Calculate offset for synchronisation
+	return &pb.StopRecordReply{
+		DiscordKeys: ids,
+		Roll20Key:   r20Key,
+	}, nil
 }

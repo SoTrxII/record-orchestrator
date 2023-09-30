@@ -20,23 +20,11 @@ message StopRecordRequest {
 }
 
 message StopRecordReply {
-  string jobId = 1;
+  repeated string discordKeys = 1;
+  string roll20Key = 2;
 }
-
-/*message WatchRequest {
-  string id = 1;
-}
-
-message ProcessingStatus {
-  string id = 1;
-  string status = 2;
-  // TODO
-}*/
-
 
 service RecordService {
-  // Stream of events.
- // rpc Watch(WatchRequest) returns (stream ProcessingStatus) ;
   rpc Start(StartRecordRequest) returns (StartRecordReply);
   rpc Stop(StopRecordRequest) returns (StopRecordReply);
 }
