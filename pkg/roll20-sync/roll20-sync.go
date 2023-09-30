@@ -47,12 +47,12 @@ func (r *Roll20Sync) Stop(r20Id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	res, err := r.client.InvokeMethodWithContent(context.Background(), r.component, "v1/jukeboxsyncer/stop", "POST", &utils.DataContent{
+	_, err = r.client.InvokeMethodWithContent(context.Background(), r.component, "v1/jukeboxsyncer/stop", "POST", &utils.DataContent{
 		Data:        content,
 		ContentType: "application/json",
 	})
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s.wav", res), nil
+	return fmt.Sprintf("%s.wav", r20Id), nil
 }
