@@ -54,5 +54,5 @@ func (r *Roll20Sync) Stop(r20Id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s.wav", r20Id), nil
+	return fmt.Sprintf("%s.ogg", r20Id), nil
 }
