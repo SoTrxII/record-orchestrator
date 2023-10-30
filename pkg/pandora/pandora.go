@@ -25,7 +25,7 @@ type Pandora struct {
 
 func NewPandora(pubClient utils.Publisher, subServer utils.Subscriber, component string, opt PandoraOpt) (*Pandora, error) {
 	if opt.WaitTimeout == 0 {
-		opt.WaitTimeout = time.Second * 10
+		opt.WaitTimeout = time.Second * 30
 	}
 	p := &Pandora{
 		pubClient: pubClient,
