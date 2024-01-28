@@ -23,4 +23,7 @@ go.work
 rec
 # IntelliJ IDEA
 .idea
-.dapr
+
+# Data directory for dapr
+.dapr/*
+!.dapr/resources

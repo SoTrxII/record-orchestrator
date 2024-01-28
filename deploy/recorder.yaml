@@ -1,0 +1,54 @@
+version: 1
+apps:
+  - appID: record-orchestrator
+    appDirPath: ..
+    appProtocol: grpc
+    appPort: 50399
+    env:
+      SERVER_PORT: 50399
+    # Kubernetes only values
+    containerImage: "docker.io/sotrx/record-orchestrator:1.2.1"
+    createService: true
+    # Local only
+    command: [ "go","run", "cmd/server.go" ]
+
+  - appID: pandora
+    appDirPath: ../../pandora
+    appPort: 50301
+    appProtocol: http
+    daprHTTPMaxRequestSize: 1200
+    env:
+      DAPR_SERVER_PORT: "50301"
+      PUBSUB_NAME: "pubsub"
+      OBJECT_STORE_NAME: "object-store"
+    # Kubernetes only values
+    containerImage: "docker.io/sotrx/pandora:2.5.1"
+    # Local only
+    command: [ "yarn","run", "start:dev" ]
+
+
+  - appID: roll20-audio-sync
+    appDirPath: ../../roll20-audio-sync
+    appPort: 50302
+    appProtocol: http
+    env:
+      APP_PORT: 50302
+    # Kubernetes only values
+    containerImage: "docker.io/sotrx/roll20-audio-sync:0.3.1"
+    # Local only
+    command: ["go","run", "main.go"]
+
+
+  - appID: live-audio-mixer
+    appDirPath: ../../live-audio-mixer
+    appPort: 50303
+    appProtocol: grpc
+    env:
+      DAPR_MAX_REQUEST_SIZE_MB: 2500
+      SERVER_PORT: 50303
+      OBJECT_STORE_NAME: "object-store"
+    # Kubernetes only values
+    containerImage: "docker.io/sotrx/live-audio-mixer:0.8.1"
+    daprHTTPMaxRequestSize: 2500
+    # Local only
+    command: ["go","run", "cmd/server.go"]
