@@ -76,15 +76,22 @@ The following backing services are required:
 To start the project, clone the projects repositories:
 
 ```bash
-git clone 
+git clone https://github.com/SoTrxII/record-orchestrator
+git clone https://github.com/SoTrxII/roll20-audio-sync
+git clone https://github.com/SoTrxII/live-audio-mixer
+# For the JS project, also install the dependencies
+git clone https://github.com/SoTrxII/Pandora && cd Pandora && npm install && cd ..
 ```
 
+Then start the project.
+
 ```bash
+cd record-orchestrator
 # Start the backing services
 ./deploy/start-dependencies.sh
 # Start the orchestrator
 dapr run -f ./deploy/recorder.yaml
-```
+```   
 
 
 
