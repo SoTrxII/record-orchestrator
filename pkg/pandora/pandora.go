@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dapr/go-sdk/service/common"
+	"github.com/google/uuid"
 	"log/slog"
 	"record-orchestrator/internal/utils"
+	"sync"
 	"time"
 )
 
@@ -19,15 +21,19 @@ type Pandora struct {
 	subServer utils.Subscriber
 	pubClient utils.Publisher
 	component string
-	// Replies are delivered on two separate channels so an ack for a start
-	// request can never be picked up by a pending stop request, and vice versa.
-	// Both are buffered so a reply landing before the caller parks on the
-	// channel isn't lost.
-	// Note this still assumes a single request of each kind in flight at a
-	// time : routing replies to concurrent sessions needs a correlation id.
-	startReplies chan PandoraReply
-	stopReplies  chan PandoraReply
-	opt          *PandoraOpt
+	// One entry per in-flight request, keyed by the correlation id Pandora
+	// echoes back. This is what allows several recording sessions to be
+	// started and stopped concurrently without their replies crossing over.
+	mu      sync.Mutex
+	pending map[string]pendingRequest
+	opt     *PandoraOpt
+}
+
+// A request waiting for its reply. The topic is kept so a reply can never be
+// handed to a request of the other kind, whatever its correlation id
+type pendingRequest struct {
+	replyTopic string
+	replies    chan PandoraReply
 }
 
 func NewPandora(pubClient utils.Publisher, subServer utils.Subscriber, component string, opt PandoraOpt) (*Pandora, error) {
@@ -35,12 +41,11 @@ func NewPandora(pubClient utils.Publisher, subServer utils.Subscriber, component
 		opt.WaitTimeout = time.Second * 30
 	}
 	p := &Pandora{
-		pubClient:    pubClient,
-		subServer:    subServer,
-		component:    component,
-		startReplies: make(chan PandoraReply, 1),
-		stopReplies:  make(chan PandoraReply, 1),
-		opt:          &opt,
+		pubClient: pubClient,
+		subServer: subServer,
+		component: component,
+		pending:   map[string]pendingRequest{},
+		opt:       &opt,
 	}
 
 	err := p.subscribeTo(subServer)
@@ -75,14 +80,75 @@ func (p *Pandora) subscribeTo(subServer utils.Subscriber) error {
 	return nil
 }
 
+// register allocates a correlation id and the channel the reply on replyTopic
+// will arrive on. The channel is buffered so delivering a reply never blocks,
+// even if the caller has already given up waiting for it
+func (p *Pandora) register(replyTopic string) (string, chan PandoraReply) {
+	id := uuid.NewString()
+	replies := make(chan PandoraReply, 1)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pending[id] = pendingRequest{replyTopic: replyTopic, replies: replies}
+	return id, replies
+}
+
+func (p *Pandora) unregister(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.pending, id)
+}
+
+// deliver hands a reply to the request that asked for it. A reply nobody is
+// waiting for anymore (the request timed out, or the recording was resumed
+// after a crash) is dropped rather than blocking the Dapr topic handler
+func (p *Pandora) deliver(correlationId string, reply PandoraReply, topic string) {
+	p.mu.Lock()
+	req, isPending := p.pending[correlationId]
+	// Compatibility with a Pandora that doesn't echo correlation ids yet : an
+	// unlabelled reply is only unambiguous when a single request of that kind
+	// is in flight. Drop this branch once every Pandora instance is up to date.
+	if !isPending && correlationId == "" {
+		if id, only, isSingle := p.onlyPendingOn(topic); isSingle {
+			slog.Warn(fmt.Sprintf("[Pandora] :: Reply on topic %q carries no correlation id, assuming it answers the only request in flight (%s). Is Pandora up to date ?", topic, id))
+			req, isPending = only, true
+		}
+	}
+	p.mu.Unlock()
+
+	if !isPending {
+		slog.Warn(fmt.Sprintf("[Pandora] :: Dropping reply on topic %q, no request is waiting for correlation id %q", topic, correlationId))
+		return
+	}
+	select {
+	case req.replies <- reply:
+	default:
+		slog.Warn(fmt.Sprintf("[Pandora] :: Dropping duplicate reply on topic %q for correlation id %q", topic, correlationId))
+	}
+}
+
+// onlyPendingOn returns the sole request awaiting a reply on this topic, if
+// there is exactly one. Callers must hold the lock
+func (p *Pandora) onlyPendingOn(topic string) (string, pendingRequest, bool) {
+	var foundId string
+	var found pendingRequest
+	matches := 0
+	for id, req := range p.pending {
+		if req.replyTopic != topic {
+			continue
+		}
+		foundId, found, matches = id, req, matches+1
+	}
+	return foundId, found, matches == 1
+}
+
 // Start a new recording session
 func (p *Pandora) Start(vcId string) error {
-	// Pandora can only record a single voice channel at a time.
-	// In an effort to be completely stateless, we will let Pandora
-	// check the recording state
-	drainReplies(p.startReplies)
+	correlationId, replies := p.register(S_Started)
+	defer p.unregister(correlationId)
+
 	err := p.pubClient.PublishEvent(context.Background(), p.component, P_Start, StartPandoraRequest{
 		VoiceChannelId: vcId,
+		CorrelationId:  correlationId,
 	})
 	if err != nil {
 		return err
@@ -90,7 +156,7 @@ func (p *Pandora) Start(vcId string) error {
 	select {
 	case <-time.After(p.opt.WaitTimeout):
 		err = fmt.Errorf("[Pandora] :: Timeout during initialization, could not start recording")
-	case reply := <-p.startReplies:
+	case reply := <-replies:
 		if reply.Error != nil {
 			err = fmt.Errorf("[Pandora] :: error during initialization, could not start recording : %w", reply.Error)
 		}
@@ -99,9 +165,12 @@ func (p *Pandora) Start(vcId string) error {
 }
 
 func (p *Pandora) Stop(vcId string) ([]string, error) {
-	drainReplies(p.stopReplies)
+	correlationId, replies := p.register(S_Ended)
+	defer p.unregister(correlationId)
+
 	err := p.pubClient.PublishEvent(context.Background(), p.component, P_End, StopPandoraRequest{
 		VoiceChannelId: vcId,
+		CorrelationId:  correlationId,
 	})
 	if err != nil {
 		return []string{}, err
@@ -111,7 +180,7 @@ func (p *Pandora) Stop(vcId string) ([]string, error) {
 	select {
 	case <-time.After(p.opt.WaitTimeout):
 		err = fmt.Errorf("[Pandora] :: Timeout, could not end recording")
-	case reply := <-p.stopReplies:
+	case reply := <-replies:
 		if reply.Error != nil {
 			err = fmt.Errorf("[Pandora] :: could not end recording : %w", reply.Error)
 		} else {
@@ -121,27 +190,6 @@ func (p *Pandora) Stop(vcId string) ([]string, error) {
 	return ids, err
 }
 
-// drainReplies discards a reply left behind by a previous request that timed
-// out, so it can't be mistaken for the reply to the request we're about to send
-func drainReplies(replies chan PandoraReply) {
-	select {
-	case stale := <-replies:
-		slog.Warn(fmt.Sprintf("[Pandora] :: Discarding a stale reply %+v", stale))
-	default:
-	}
-}
-
-// deliver hands a reply over to the waiting caller. It never blocks : if no
-// request is waiting anymore (it timed out), the reply is dropped rather than
-// pinning the Dapr topic handler goroutine forever
-func deliver(replies chan PandoraReply, reply PandoraReply, topic string) {
-	select {
-	case replies <- reply:
-	default:
-		slog.Warn(fmt.Sprintf("[Pandora] :: Dropping reply on topic %q, no request is waiting for it", topic))
-	}
-}
-
 func (p *Pandora) onStoppedReply(ctx context.Context, e *common.TopicEvent) (retry bool, err error) {
 	reply := StopPandoraReply{}
 	err = json.Unmarshal(e.RawData, &reply)
@@ -149,7 +197,7 @@ func (p *Pandora) onStoppedReply(ctx context.Context, e *common.TopicEvent) (ret
 		err = fmt.Errorf("[Pandora] :: Received wrong response type from pandora %+v, %w", reply, err)
 		slog.Error(err.Error())
 	}
-	deliver(p.stopReplies, PandoraReply{
+	p.deliver(reply.CorrelationId, PandoraReply{
 		Started: nil,
 		Stopped: &reply,
 		Error:   err,
@@ -164,7 +212,7 @@ func (p *Pandora) onStartedReply(ctx context.Context, e *common.TopicEvent) (ret
 		err = fmt.Errorf("[Pandora] :: Received wrong response type from pandora %+v, %w", reply, err)
 		slog.Error(err.Error())
 	}
-	deliver(p.startReplies, PandoraReply{
+	p.deliver(reply.CorrelationId, PandoraReply{
 		Started: &reply,
 		Stopped: nil,
 		Error:   err,

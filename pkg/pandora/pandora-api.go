@@ -17,20 +17,28 @@ const (
 	S_Ended   = "stoppedRecordingDiscord"
 )
 
+// Every request carries a correlation id that Pandora echoes back on its
+// reply, so several recording sessions can be in flight without their replies
+// getting mixed up. Pandora keeps it in the controller state, which means it
+// survives a disaster recovery restart.
 type StartPandoraRequest struct {
 	VoiceChannelId string `json:"voiceChannelId"`
+	CorrelationId  string `json:"correlationId"`
 }
 
 type StartPandoraReply struct {
 	VoiceChannelId string `json:"voiceChannelId"`
+	CorrelationId  string `json:"correlationId"`
 }
 
 type StopPandoraRequest struct {
 	VoiceChannelId string `json:"voiceChannelId"`
+	CorrelationId  string `json:"correlationId"`
 }
 
 type StopPandoraReply struct {
-	Ids []string `json:"ids"`
+	Ids           []string `json:"ids"`
+	CorrelationId string   `json:"correlationId"`
 }
 
 type PandoraReply struct {

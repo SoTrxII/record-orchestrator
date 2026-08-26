@@ -260,3 +260,106 @@ func TestPandora_StartAckDoesNotSatisfyStop(t *testing.T) {
 	_, err = p.Stop("1")
 	assert.Error(t, err, "a start ack was consumed by a pending stop request")
 }
+
+// The whole point of the correlation id : two sessions stopped at the same
+// time must each get their own recording ids back, whatever the reply order
+func TestPandora_ConcurrentStopsGetTheirOwnReplies(t *testing.T) {
+	pub := mockPublisher{}
+	sub := mockSubscriber{}
+	sub.On("AddTopicEventHandler", mock.Anything, mock.Anything).Return(nil)
+
+	published := make(chan StopPandoraRequest, 2)
+	pub.On("PublishEvent", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			published <- args.Get(3).(StopPandoraRequest)
+		}).Return(nil)
+
+	p, err := NewPandora(&pub, &sub, "", PandoraOpt{WaitTimeout: 5 * time.Second})
+	assert.NoError(t, err)
+
+	type result struct {
+		ids []string
+		err error
+	}
+	resA, resB := make(chan result, 1), make(chan result, 1)
+	go func() { ids, err := p.Stop("channel-A"); resA <- result{ids, err} }()
+	go func() { ids, err := p.Stop("channel-B"); resB <- result{ids, err} }()
+
+	// Both requests are out : map each correlation id to its voice channel
+	correlationOf := map[string]string{}
+	for i := 0; i < 2; i++ {
+		req := <-published
+		correlationOf[req.VoiceChannelId] = req.CorrelationId
+	}
+	assert.Len(t, correlationOf, 2)
+	assert.NotEqual(t, correlationOf["channel-A"], correlationOf["channel-B"],
+		"each request must get its own correlation id")
+
+	// Reply in the opposite order to make sure ordering plays no part
+	for _, r := range []struct {
+		channel string
+		ids     []string
+	}{{"channel-B", []string{"rec-B"}}, {"channel-A", []string{"rec-A"}}} {
+		payload, err := json.Marshal(StopPandoraReply{
+			Ids:           r.ids,
+			CorrelationId: correlationOf[r.channel],
+		})
+		assert.NoError(t, err)
+		_, _ = p.onStoppedReply(context.Background(), &common.TopicEvent{RawData: payload})
+	}
+
+	a, b := <-resA, <-resB
+	assert.NoError(t, a.err)
+	assert.NoError(t, b.err)
+	assert.Equal(t, []string{"rec-A"}, a.ids, "channel-A got another session's recording ids")
+	assert.Equal(t, []string{"rec-B"}, b.ids, "channel-B got another session's recording ids")
+}
+
+// A reply for a session we know nothing about must not satisfy a pending request
+func TestPandora_UnknownCorrelationIdIsDropped(t *testing.T) {
+	pub := mockPublisher{}
+	sub := mockSubscriber{}
+	sub.On("AddTopicEventHandler", mock.Anything, mock.Anything).Return(nil)
+	pub.On("PublishEvent", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	p, err := NewPandora(&pub, &sub, "", PandoraOpt{WaitTimeout: 300 * time.Millisecond})
+	assert.NoError(t, err)
+
+	payload, err := json.Marshal(StopPandoraReply{Ids: []string{"nope"}, CorrelationId: "some-other-session"})
+	assert.NoError(t, err)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_, _ = p.onStoppedReply(context.Background(), &common.TopicEvent{RawData: payload})
+	}()
+
+	ids, err := p.Stop("1")
+	assert.Error(t, err, "a reply for an unrelated session was accepted")
+	assert.Empty(t, ids)
+}
+
+// Compatibility shim : an unlabelled reply is only safe to assume when a
+// single request of that kind is waiting. With two, it must be dropped
+func TestPandora_UnlabelledReplyIsDroppedWhenAmbiguous(t *testing.T) {
+	pub := mockPublisher{}
+	sub := mockSubscriber{}
+	sub.On("AddTopicEventHandler", mock.Anything, mock.Anything).Return(nil)
+	published := make(chan StopPandoraRequest, 2)
+	pub.On("PublishEvent", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) { published <- args.Get(3).(StopPandoraRequest) }).Return(nil)
+
+	p, err := NewPandora(&pub, &sub, "", PandoraOpt{WaitTimeout: 500 * time.Millisecond})
+	assert.NoError(t, err)
+
+	errs := make(chan error, 2)
+	go func() { _, err := p.Stop("A"); errs <- err }()
+	go func() { _, err := p.Stop("B"); errs <- err }()
+	<-published
+	<-published
+
+	// No correlation id, two candidates : we cannot guess
+	payload, err := json.Marshal(StopPandoraReply{Ids: []string{"ambiguous"}})
+	assert.NoError(t, err)
+	_, _ = p.onStoppedReply(context.Background(), &common.TopicEvent{RawData: payload})
+
+	assert.Error(t, <-errs)
+	assert.Error(t, <-errs)
+}
