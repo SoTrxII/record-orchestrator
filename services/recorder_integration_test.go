@@ -53,7 +53,7 @@ func beforeAll() net.Listener {
 	}
 	daprClient := client.NewClientWithConnection(conn)
 	// State store
-	store := memory.NewMemory[State](daprClient, DEFAULT_STATE_STORE_ID)
+	store := memory.NewMemory[memory.State](daprClient, DEFAULT_STATE_STORE_ID)
 	// Recorders themselves
 	pandora, err := pandora.NewPandora(daprClient, subServer, DEFAULT_PUBSUB_ID, pandora.PandoraOpt{})
 	if err != nil {

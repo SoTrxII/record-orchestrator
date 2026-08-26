@@ -5,13 +5,16 @@ type DiscordRecorder interface {
 	Stop(vcId string) ([]string, error)
 }
 
-type topics string
-
+// Topics used to talk to Pandora, following a request/reply pattern.
+// The P_* topics are the ones we publish on and Pandora subscribes to.
+// The S_* topics are the ones Pandora replies on and we subscribe to.
+// These names must stay in sync with Pandora's PubSubBroker.TOPICS.
 const (
-	P_Start   topics = "startRecordingDiscord"
-	S_Started        = "startRecordingDiscord"
-	P_End            = "stopRecordingDiscord"
-	S_Ended          = "stoppedRecordingDiscord"
+	P_Start = "startRecordingDiscord"
+	P_End   = "stopRecordingDiscord"
+
+	S_Started = "startedRecordingDiscord"
+	S_Ended   = "stoppedRecordingDiscord"
 )
 
 type StartPandoraRequest struct {

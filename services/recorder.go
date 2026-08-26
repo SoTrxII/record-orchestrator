@@ -53,16 +53,18 @@ func (r *Recorder) Start(payload *pb.StartRecordRequest) (*pb.StartRecordReply, 
 		Roll20:  false,
 	}
 	state.VcId = payload.VoiceChannelId
-	//r.memory.Save(payload.VoiceChannelId, true)
-	// Roll20 is optional so we don't return an error if it's not provided
+
+	// Roll20 is optional so we don't return an error if it's not provided.
+	// If it fails we keep the Discord recording going, but we must still fall
+	// through to saving the state : otherwise the orchestrator believes nothing
+	// is being recorded and refuses to stop it later on.
 	if payload.GetRoll20GameId() != "" {
-		err = r.roll20Sync.Start(payload.GetRoll20GameId())
-		if err != nil {
+		if err := r.roll20Sync.Start(payload.GetRoll20GameId()); err != nil {
 			slog.Warn(fmt.Sprintf("[Recorder] :: Failed to start roll20 sync, continuing without it. Reason : %s", err.Error()))
-			return &reply, nil
+		} else {
+			reply.Roll20 = true
+			state.R20Id = payload.GetRoll20GameId()
 		}
-		reply.Roll20 = true
-		state.R20Id = payload.GetRoll20GameId()
 	}
 
 	err = r.memory.Save(r.stateKey, *state)
@@ -83,7 +85,11 @@ func (r *Recorder) Stop(payload *pb.StopRecordRequest) (*pb.StopRecordReply, err
 	if state == nil {
 		return nil, fmt.Errorf("[Recorder] :: not recording")
 	}
-	if state.VcId != payload.VoiceChannelId || state.R20Id != payload.GetRoll20GameId() {
+	// The voice channel identifies the recording. The roll20 id is only checked
+	// when we actually managed to start a roll20 sync : if it failed at start
+	// time the caller still sends its id, and that must not block the stop.
+	if state.VcId != payload.VoiceChannelId ||
+		(state.R20Id != "" && state.R20Id != payload.GetRoll20GameId()) {
 		return nil, fmt.Errorf("[Recorder] :: Wrong recordings parameters, expected %+v, got %+v", state, payload)
 	}
 
@@ -93,8 +99,8 @@ func (r *Recorder) Stop(payload *pb.StopRecordRequest) (*pb.StopRecordReply, err
 	}
 
 	r20Key := ""
-	if payload.GetRoll20GameId() != "" {
-		r20Key, err = r.roll20Sync.Stop(payload.GetRoll20GameId())
+	if state.R20Id != "" {
+		r20Key, err = r.roll20Sync.Stop(state.R20Id)
 		if err != nil {
 			slog.Warn(fmt.Sprintf("[Recorder] :: Failed to stop roll20 sync, continuing without it. Reason : %s", err.Error()))
 		}
