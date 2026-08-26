@@ -7,15 +7,57 @@ import (
 	"record-orchestrator/pkg/memory"
 	pb "record-orchestrator/proto"
 	test_utils "record-orchestrator/test-utils"
+	"sync"
 	"testing"
 )
+
+// A state store backed by a map, so tests exercise the real allocation logic
+// rather than a canned answer
+type fakeStore struct {
+	mu     sync.Mutex
+	states map[string]memory.State
+}
+
+func newFakeStore() *fakeStore {
+	return &fakeStore{states: map[string]memory.State{}}
+}
+
+func (f *fakeStore) Save(key string, value memory.State) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states[key] = value
+	return nil
+}
+
+func (f *fakeStore) Get(key string) (*memory.State, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	state, ok := f.states[key]
+	if !ok {
+		return nil, nil
+	}
+	return &state, nil
+}
+
+func (f *fakeStore) Delete(key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.states, key)
+	return nil
+}
+
+func (f *fakeStore) sessions() map[string]memory.Session {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.states["recorder-state"].Sessions
+}
 
 func TestRecorder_StartOnlyPandora(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
 	r20Rec := test_utils.MockR20Recorder{}
 	mem := test_utils.MockStateStore{}
-	recorder := NewRecorder(&pandora, &r20Rec, &mem)
-	pandora.On("Start", "1").Return(nil)
+	recorder := NewRecorder(&pandora, &r20Rec, &mem, nil)
+	pandora.On("Start", "", "1").Return(nil)
 	mem.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
 	mem.EXPECT().Get(mock.Anything).Return(nil, nil)
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1"})
@@ -30,16 +72,15 @@ func TestRecorder_StartOnlyPandora(t *testing.T) {
 func TestRecorder_StartPandoraAndRoll20(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
 	r20Rec := test_utils.MockR20Recorder{}
-	mem := test_utils.MockStateStore{}
-	recorder := NewRecorder(&pandora, &r20Rec, &mem)
-	pandora.On("Start", "1").Return(nil)
+	store := newFakeStore()
+	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
+	pandora.On("Start", "", "1").Return(nil)
 	r20Rec.On("Start", "2").Return(nil)
-	mem.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
-	mem.EXPECT().Get(mock.Anything).Return(nil, nil)
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
 	assert.Equal(t, &pb.StartRecordReply{Discord: true, Roll20: true}, ret)
 	pandora.AssertExpectations(t)
 	r20Rec.AssertExpectations(t)
+	assert.Equal(t, "2", store.sessions()["1"].R20Id)
 	if err != nil {
 		t.Error(err)
 	}
@@ -50,24 +91,18 @@ func TestRecorder_StartPandoraAndRoll20(t *testing.T) {
 func TestRecorder_StartSavesStateWhenRoll20Fails(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
 	r20Rec := test_utils.MockR20Recorder{}
-	mem := test_utils.MockStateStore{}
-	recorder := NewRecorder(&pandora, &r20Rec, &mem)
-	pandora.On("Start", "1").Return(nil)
+	store := newFakeStore()
+	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
+	pandora.On("Start", "", "1").Return(nil)
 	r20Rec.On("Start", "2").Return(errors.New("roll20 is down"))
-	mem.EXPECT().Get(mock.Anything).Return(nil, nil)
-
-	var saved memory.State
-	mem.EXPECT().Save(mock.Anything, mock.Anything).
-		Run(func(key string, value memory.State) { saved = value }).Return(nil)
 
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
 	assert.NoError(t, err)
 	// Discord kept recording, roll20 did not
 	assert.Equal(t, &pb.StartRecordReply{Discord: true, Roll20: false}, ret)
-	assert.Equal(t, memory.State{VcId: "1", R20Id: ""}, saved)
+	assert.Equal(t, memory.Session{VcId: "1", R20Id: ""}, store.sessions()["1"])
 	pandora.AssertExpectations(t)
 	r20Rec.AssertExpectations(t)
-	mem.AssertExpectations(t)
 }
 
 // Following the case above : the caller still knows about the roll20 id, and
@@ -75,11 +110,12 @@ func TestRecorder_StartSavesStateWhenRoll20Fails(t *testing.T) {
 func TestRecorder_StopWhenRoll20NeverStarted(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
 	r20Rec := test_utils.MockR20Recorder{}
-	mem := test_utils.MockStateStore{}
-	recorder := NewRecorder(&pandora, &r20Rec, &mem)
-	pandora.On("Stop", "1").Return([]string{"rec-1"}, nil)
-	mem.EXPECT().Get(mock.Anything).Return(&memory.State{VcId: "1", R20Id: ""}, nil)
-	mem.EXPECT().Delete(mock.Anything).Return(nil)
+	store := newFakeStore()
+	_ = store.Save("recorder-state", memory.State{
+		Sessions: map[string]memory.Session{"1": {VcId: "1"}},
+	})
+	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
+	pandora.On("Stop", "", "1").Return([]string{"rec-1"}, nil)
 
 	ret, err := recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
 	assert.NoError(t, err)
@@ -88,17 +124,20 @@ func TestRecorder_StopWhenRoll20NeverStarted(t *testing.T) {
 	// We never started it, so we must not try to stop it
 	r20Rec.AssertNotCalled(t, "Stop", mock.Anything)
 	pandora.AssertExpectations(t)
+	assert.Empty(t, store.sessions())
 }
 
 // A stop aimed at another voice channel must still be rejected
 func TestRecorder_StopWrongVoiceChannel(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
 	r20Rec := test_utils.MockR20Recorder{}
-	mem := test_utils.MockStateStore{}
-	recorder := NewRecorder(&pandora, &r20Rec, &mem)
-	mem.EXPECT().Get(mock.Anything).Return(&memory.State{VcId: "1"}, nil)
+	store := newFakeStore()
+	_ = store.Save("recorder-state", memory.State{
+		Sessions: map[string]memory.Session{"1": {VcId: "1"}},
+	})
+	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
 
 	_, err := recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "42"})
 	assert.Error(t, err)
-	pandora.AssertNotCalled(t, "Stop", mock.Anything)
+	pandora.AssertNotCalled(t, "Stop", mock.Anything, mock.Anything)
 }

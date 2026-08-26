@@ -141,12 +141,23 @@ func (p *Pandora) onlyPendingOn(topic string) (string, pendingRequest, bool) {
 	return foundId, found, matches == 1
 }
 
-// Start a new recording session
-func (p *Pandora) Start(vcId string) error {
+// RequestTopic addresses a request to one instance of the Pandora pool.
+// Must stay in sync with PubSubBroker.requestTopic on Pandora's side.
+// An empty instance id targets the plain topic, which is what a Pandora
+// running on its own listens to
+func RequestTopic(topic, instanceId string) string {
+	if instanceId == "" {
+		return topic
+	}
+	return fmt.Sprintf("%s-%s", topic, instanceId)
+}
+
+// Start a new recording session on one instance of the pool
+func (p *Pandora) Start(instanceId, vcId string) error {
 	correlationId, replies := p.register(S_Started)
 	defer p.unregister(correlationId)
 
-	err := p.pubClient.PublishEvent(context.Background(), p.component, P_Start, StartPandoraRequest{
+	err := p.pubClient.PublishEvent(context.Background(), p.component, RequestTopic(P_Start, instanceId), StartPandoraRequest{
 		VoiceChannelId: vcId,
 		CorrelationId:  correlationId,
 	})
@@ -164,11 +175,11 @@ func (p *Pandora) Start(vcId string) error {
 	return err
 }
 
-func (p *Pandora) Stop(vcId string) ([]string, error) {
+func (p *Pandora) Stop(instanceId, vcId string) ([]string, error) {
 	correlationId, replies := p.register(S_Ended)
 	defer p.unregister(correlationId)
 
-	err := p.pubClient.PublishEvent(context.Background(), p.component, P_End, StopPandoraRequest{
+	err := p.pubClient.PublishEvent(context.Background(), p.component, RequestTopic(P_End, instanceId), StopPandoraRequest{
 		VoiceChannelId: vcId,
 		CorrelationId:  correlationId,
 	})

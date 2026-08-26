@@ -17,13 +17,13 @@ func (_m *MockDiscordRecorder) EXPECT() *MockDiscordRecorder_Expecter {
 	return &MockDiscordRecorder_Expecter{mock: &_m.Mock}
 }
 
-// Start provides a mock function with given fields: vcId
-func (_m *MockDiscordRecorder) Start(vcId string) error {
-	ret := _m.Called(vcId)
+// Start provides a mock function with given fields: instanceId, vcId
+func (_m *MockDiscordRecorder) Start(instanceId string, vcId string) error {
+	ret := _m.Called(instanceId, vcId)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string) error); ok {
-		r0 = rf(vcId)
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(instanceId, vcId)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -37,14 +37,15 @@ type MockDiscordRecorder_Start_Call struct {
 }
 
 // Start is a helper method to define mock.On call
+//   - instanceId string
 //   - vcId string
-func (_e *MockDiscordRecorder_Expecter) Start(vcId interface{}) *MockDiscordRecorder_Start_Call {
-	return &MockDiscordRecorder_Start_Call{Call: _e.mock.On("Start", vcId)}
+func (_e *MockDiscordRecorder_Expecter) Start(instanceId interface{}, vcId interface{}) *MockDiscordRecorder_Start_Call {
+	return &MockDiscordRecorder_Start_Call{Call: _e.mock.On("Start", instanceId, vcId)}
 }
 
-func (_c *MockDiscordRecorder_Start_Call) Run(run func(vcId string)) *MockDiscordRecorder_Start_Call {
+func (_c *MockDiscordRecorder_Start_Call) Run(run func(instanceId string, vcId string)) *MockDiscordRecorder_Start_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		run(args[0].(string), args[1].(string))
 	})
 	return _c
 }
@@ -54,30 +55,30 @@ func (_c *MockDiscordRecorder_Start_Call) Return(_a0 error) *MockDiscordRecorder
 	return _c
 }
 
-func (_c *MockDiscordRecorder_Start_Call) RunAndReturn(run func(string) error) *MockDiscordRecorder_Start_Call {
+func (_c *MockDiscordRecorder_Start_Call) RunAndReturn(run func(string, string) error) *MockDiscordRecorder_Start_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Stop provides a mock function with given fields: vcId
-func (_m *MockDiscordRecorder) Stop(vcId string) ([]string, error) {
-	ret := _m.Called(vcId)
+// Stop provides a mock function with given fields: instanceId, vcId
+func (_m *MockDiscordRecorder) Stop(instanceId string, vcId string) ([]string, error) {
+	ret := _m.Called(instanceId, vcId)
 
 	var r0 []string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string) ([]string, error)); ok {
-		return rf(vcId)
+	if rf, ok := ret.Get(0).(func(string, string) ([]string, error)); ok {
+		return rf(instanceId, vcId)
 	}
-	if rf, ok := ret.Get(0).(func(string) []string); ok {
-		r0 = rf(vcId)
+	if rf, ok := ret.Get(0).(func(string, string) []string); ok {
+		r0 = rf(instanceId, vcId)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]string)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(vcId)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(instanceId, vcId)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -91,14 +92,15 @@ type MockDiscordRecorder_Stop_Call struct {
 }
 
 // Stop is a helper method to define mock.On call
+//   - instanceId string
 //   - vcId string
-func (_e *MockDiscordRecorder_Expecter) Stop(vcId interface{}) *MockDiscordRecorder_Stop_Call {
-	return &MockDiscordRecorder_Stop_Call{Call: _e.mock.On("Stop", vcId)}
+func (_e *MockDiscordRecorder_Expecter) Stop(instanceId interface{}, vcId interface{}) *MockDiscordRecorder_Stop_Call {
+	return &MockDiscordRecorder_Stop_Call{Call: _e.mock.On("Stop", instanceId, vcId)}
 }
 
-func (_c *MockDiscordRecorder_Stop_Call) Run(run func(vcId string)) *MockDiscordRecorder_Stop_Call {
+func (_c *MockDiscordRecorder_Stop_Call) Run(run func(instanceId string, vcId string)) *MockDiscordRecorder_Stop_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		run(args[0].(string), args[1].(string))
 	})
 	return _c
 }
@@ -108,7 +110,7 @@ func (_c *MockDiscordRecorder_Stop_Call) Return(_a0 []string, _a1 error) *MockDi
 	return _c
 }
 
-func (_c *MockDiscordRecorder_Stop_Call) RunAndReturn(run func(string) ([]string, error)) *MockDiscordRecorder_Stop_Call {
+func (_c *MockDiscordRecorder_Stop_Call) RunAndReturn(run func(string, string) ([]string, error)) *MockDiscordRecorder_Stop_Call {
 	_c.Call.Return(run)
 	return _c
 }

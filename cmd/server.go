@@ -18,6 +18,7 @@ import (
 	pb "record-orchestrator/proto"
 	"record-orchestrator/services"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -73,7 +74,7 @@ func main() {
 	}
 	s := grpc.NewServer()
 	daprServer := daprd.NewServiceWithGrpcServer(lis, s)
-	recorder, err := DI(daprServer, pEnv.daprGrpcPort)
+	recorder, err := DI(daprServer, pEnv)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize event controller: %w", err))
 	}
@@ -95,6 +96,9 @@ type env struct {
 	daprCpnPandora string
 	daprCpnR20     string
 	daprCpnState   string
+	// Instances of the Pandora pool a recording can be handed to. Empty means
+	// a single unnamed Pandora
+	pandoraInstances []string
 }
 
 func parseEnv() *env {
@@ -120,26 +124,34 @@ func parseEnv() *env {
 	if id, isDefined := os.LookupEnv("STORE_NAME"); isDefined && id != "" {
 		pEnv.daprCpnState = id
 	}
+	// Comma separated, and must match the PANDORA_INSTANCE_ID of each instance
+	if ids, isDefined := os.LookupEnv("PANDORA_INSTANCES"); isDefined && ids != "" {
+		for _, id := range strings.Split(ids, ",") {
+			if trimmed := strings.TrimSpace(id); trimmed != "" {
+				pEnv.pandoraInstances = append(pEnv.pandoraInstances, trimmed)
+			}
+		}
+	}
 
 	return &pEnv
 }
 
-func DI(subServer common.Service, daprPort int) (*services.Recorder, error) {
+func DI(subServer common.Service, pEnv *env) (*services.Recorder, error) {
 	// Dapr client, at the heart of everything
-	daprClient, err := makeDaprClient(daprPort, 16)
+	daprClient, err := makeDaprClient(pEnv.daprGrpcPort, 16)
 	if err != nil {
 		return nil, err
 	}
 
 	// State store
-	store := memory.NewMemory[memory.State](daprClient, DEFAULT_STATE_STORE_ID)
+	store := memory.NewMemory[memory.State](daprClient, pEnv.daprCpnState)
 	// Recorders themselves
-	pandora, err := pando.NewPandora(daprClient, subServer, DEFAULT_PUBSUB_ID, pando.PandoraOpt{})
+	pandora, err := pando.NewPandora(daprClient, subServer, pEnv.daprCpnPandora, pando.PandoraOpt{})
 	if err != nil {
 		return nil, err
 	}
-	r20 := roll20_sync.NewRoll20Sync(daprClient, DEFAULT_R20_ID)
-	return services.NewRecorder(pandora, r20, store), nil
+	r20 := roll20_sync.NewRoll20Sync(daprClient, pEnv.daprCpnR20)
+	return services.NewRecorder(pandora, r20, store, pEnv.pandoraInstances), nil
 }
 
 func makeDaprClient(port, maxRequestSizeMB int) (client.Client, error) {

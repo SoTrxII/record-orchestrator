@@ -54,7 +54,7 @@ func TestPandora_OnStartedReply_Ok(t *testing.T) {
 			done <- true
 		}
 	}()
-	err = p.Start("1")
+	err = p.Start("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.NoError(t, err)
@@ -79,7 +79,7 @@ func TestPandora_OnStartedReply_WrongReply(t *testing.T) {
 			done <- true
 		}
 	}()
-	err = p.Start("1")
+	err = p.Start("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.Error(t, err)
@@ -102,7 +102,7 @@ func TestPandora_OnStartedReply_Timeout(t *testing.T) {
 			assert.Error(t, err)
 		}
 	}()
-	err = p.Start("1")
+	err = p.Start("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.Error(t, err)
@@ -124,7 +124,7 @@ func TestPandora_OnStoppedReply_Timeout(t *testing.T) {
 			assert.Error(t, err)
 		}
 	}()
-	_, err = p.Stop("1")
+	_, err = p.Stop("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.Error(t, err)
@@ -147,7 +147,7 @@ func TestPandora_OnStoppedReply_WrongReply(t *testing.T) {
 			done <- true
 		}
 	}()
-	_, err = p.Stop("1")
+	_, err = p.Stop("", "1")
 	assert.Error(t, err)
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
@@ -175,7 +175,7 @@ func TestPandora_OnStoppedReply_Ok(t *testing.T) {
 			done <- true
 		}
 	}()
-	res, err := p.Stop("1")
+	res, err := p.Stop("", "1")
 	assert.NoError(t, err)
 	assert.Equal(t, ids, res)
 	pub.AssertExpectations(t)
@@ -237,7 +237,7 @@ func TestPandora_LateReplyIsNotReusedByNextRequest(t *testing.T) {
 	}
 
 	// That stale reply must not satisfy the next request
-	assert.Error(t, p.Start("2"), "a stale reply was mistaken for this request's ack")
+	assert.Error(t, p.Start("", "2"), "a stale reply was mistaken for this request's ack")
 }
 
 // A start ack must never be consumed by a pending stop request
@@ -257,7 +257,7 @@ func TestPandora_StartAckDoesNotSatisfyStop(t *testing.T) {
 		_, _ = p.onStartedReply(context.Background(), &common.TopicEvent{RawData: payload})
 	}()
 
-	_, err = p.Stop("1")
+	_, err = p.Stop("", "1")
 	assert.Error(t, err, "a start ack was consumed by a pending stop request")
 }
 
@@ -282,8 +282,8 @@ func TestPandora_ConcurrentStopsGetTheirOwnReplies(t *testing.T) {
 		err error
 	}
 	resA, resB := make(chan result, 1), make(chan result, 1)
-	go func() { ids, err := p.Stop("channel-A"); resA <- result{ids, err} }()
-	go func() { ids, err := p.Stop("channel-B"); resB <- result{ids, err} }()
+	go func() { ids, err := p.Stop("", "channel-A"); resA <- result{ids, err} }()
+	go func() { ids, err := p.Stop("", "channel-B"); resB <- result{ids, err} }()
 
 	// Both requests are out : map each correlation id to its voice channel
 	correlationOf := map[string]string{}
@@ -331,7 +331,7 @@ func TestPandora_UnknownCorrelationIdIsDropped(t *testing.T) {
 		_, _ = p.onStoppedReply(context.Background(), &common.TopicEvent{RawData: payload})
 	}()
 
-	ids, err := p.Stop("1")
+	ids, err := p.Stop("", "1")
 	assert.Error(t, err, "a reply for an unrelated session was accepted")
 	assert.Empty(t, ids)
 }
@@ -350,8 +350,8 @@ func TestPandora_UnlabelledReplyIsDroppedWhenAmbiguous(t *testing.T) {
 	assert.NoError(t, err)
 
 	errs := make(chan error, 2)
-	go func() { _, err := p.Stop("A"); errs <- err }()
-	go func() { _, err := p.Stop("B"); errs <- err }()
+	go func() { _, err := p.Stop("", "A"); errs <- err }()
+	go func() { _, err := p.Stop("", "B"); errs <- err }()
 	<-published
 	<-published
 
@@ -362,4 +362,35 @@ func TestPandora_UnlabelledReplyIsDroppedWhenAmbiguous(t *testing.T) {
 
 	assert.Error(t, <-errs)
 	assert.Error(t, <-errs)
+}
+
+// Requests are addressed to one instance of the pool. The suffix must match
+// PubSubBroker.requestTopic on Pandora's side, hence the literals
+func TestPandora_RequestTopicAddressesAnInstance(t *testing.T) {
+	assert.Equal(t, "startRecordingDiscord-pandora-0", RequestTopic(P_Start, "pandora-0"))
+	assert.Equal(t, "stopRecordingDiscord-pandora-0", RequestTopic(P_End, "pandora-0"))
+	// A lone Pandora listens on the plain topics
+	assert.Equal(t, "startRecordingDiscord", RequestTopic(P_Start, ""))
+	assert.Equal(t, "stopRecordingDiscord", RequestTopic(P_End, ""))
+	// Two instances never share a request topic
+	assert.NotEqual(t, RequestTopic(P_Start, "pandora-0"), RequestTopic(P_Start, "pandora-1"))
+}
+
+// Start and Stop must publish on the topic of the instance they target
+func TestPandora_PublishesOnTheTargetedInstanceTopic(t *testing.T) {
+	pub := mockPublisher{}
+	sub := mockSubscriber{}
+	sub.On("AddTopicEventHandler", mock.Anything, mock.Anything).Return(nil)
+	topics := make(chan string, 2)
+	pub.On("PublishEvent", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) { topics <- args.Get(2).(string) }).Return(nil)
+
+	p, err := NewPandora(&pub, &sub, "", PandoraOpt{WaitTimeout: 100 * time.Millisecond})
+	assert.NoError(t, err)
+
+	_ = p.Start("pandora-1", "channel-A")
+	assert.Equal(t, "startRecordingDiscord-pandora-1", <-topics)
+
+	_, _ = p.Stop("pandora-2", "channel-B")
+	assert.Equal(t, "stopRecordingDiscord-pandora-2", <-topics)
 }

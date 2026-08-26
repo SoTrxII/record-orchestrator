@@ -60,7 +60,7 @@ func beforeAll() net.Listener {
 		log.Fatalf("error creating dapr client: %v", err)
 	}
 	r20 := roll20_sync.NewRoll20Sync(daprClient, DEFAULT_ROLL20_ID)
-	recorder = NewRecorder(pandora, r20, store)
+	recorder = NewRecorder(pandora, r20, store, nil)
 
 	// Start the server
 	go func() {

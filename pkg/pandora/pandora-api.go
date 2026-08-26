@@ -1,13 +1,16 @@
 package pandora
 
 type DiscordRecorder interface {
-	Start(vcId string) error
-	Stop(vcId string) ([]string, error)
+	Start(instanceId, vcId string) error
+	Stop(instanceId, vcId string) ([]string, error)
 }
 
 // Topics used to talk to Pandora, following a request/reply pattern.
-// The P_* topics are the ones we publish on and Pandora subscribes to.
-// The S_* topics are the ones Pandora replies on and we subscribe to.
+// The P_* topics are the ones we publish on and Pandora subscribes to. They
+// are suffixed with an instance id to address one instance of the pool, see
+// RequestTopic.
+// The S_* topics are the ones Pandora replies on and we subscribe to. They are
+// shared by the whole pool : replies are told apart by correlation id.
 // These names must stay in sync with Pandora's PubSubBroker.TOPICS.
 const (
 	P_Start = "startRecordingDiscord"
