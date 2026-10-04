@@ -2,7 +2,16 @@ package pandora
 
 type DiscordRecorder interface {
 	Start(instanceId, vcId string) error
-	Stop(instanceId, vcId string) ([]string, error)
+	Stop(instanceId, vcId string) (Recording, error)
+}
+
+// Recording is what a stopped recording session leaves behind
+type Recording struct {
+	// Keys of the records made. There are several when Pandora had to
+	// reconnect during the session
+	Ids []string
+	// Discord ids of everyone heard in these records
+	Participants []string
 }
 
 // Topics used to talk to Pandora, following a request/reply pattern.
@@ -40,7 +49,10 @@ type StopPandoraRequest struct {
 }
 
 type StopPandoraReply struct {
-	Ids           []string `json:"ids"`
+	Ids []string `json:"ids"`
+	// Absent from the replies of a Pandora older than 3.2.0, which reads as
+	// "nobody" rather than as an error
+	Participants  []string `json:"participants"`
 	CorrelationId string   `json:"correlationId"`
 }
 

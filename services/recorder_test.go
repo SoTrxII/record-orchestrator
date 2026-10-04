@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"record-orchestrator/pkg/memory"
+	pando "record-orchestrator/pkg/pandora"
 	pb "record-orchestrator/proto"
 	test_utils "record-orchestrator/test-utils"
 	"sync"
@@ -115,11 +116,15 @@ func TestRecorder_StopWhenRoll20NeverStarted(t *testing.T) {
 		Sessions: map[string]memory.Session{"1": {VcId: "1"}},
 	})
 	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
-	pandora.On("Stop", "", "1").Return([]string{"rec-1"}, nil)
+	pandora.On("Stop", "", "1").Return(pando.Recording{
+		Ids:          []string{"rec-1"},
+		Participants: []string{"gm", "player"},
+	}, nil)
 
 	ret, err := recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"rec-1"}, ret.DiscordKeys)
+	assert.Equal(t, []string{"gm", "player"}, ret.ParticipantIds)
 	assert.Empty(t, ret.Roll20Key)
 	// We never started it, so we must not try to stop it
 	r20Rec.AssertNotCalled(t, "Stop", mock.Anything)

@@ -100,7 +100,7 @@ func (r *Recorder) Stop(payload *pb.StopRecordRequest) (*pb.StopRecordReply, err
 		return nil, fmt.Errorf("[Recorder] :: Wrong recordings parameters, expected %+v, got %+v", session, payload)
 	}
 
-	ids, err := r.pandora.Stop(session.InstanceId, payload.VoiceChannelId)
+	recording, err := r.pandora.Stop(session.InstanceId, payload.VoiceChannelId)
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +119,9 @@ func (r *Recorder) Stop(payload *pb.StopRecordRequest) (*pb.StopRecordReply, err
 
 	// TODO :: Calculate offset for synchronisation
 	return &pb.StopRecordReply{
-		DiscordKeys: ids,
-		Roll20Key:   r20Key,
+		DiscordKeys:    recording.Ids,
+		Roll20Key:      r20Key,
+		ParticipantIds: recording.Participants,
 	}, nil
 }
 

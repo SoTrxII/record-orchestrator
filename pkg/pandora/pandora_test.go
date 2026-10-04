@@ -163,7 +163,8 @@ func TestPandora_OnStoppedReply_Ok(t *testing.T) {
 	assert.NoError(t, err)
 
 	ids := []string{"1", "2", "3"}
-	payload, err := json.Marshal(StopPandoraReply{Ids: ids})
+	participants := []string{"gm", "player"}
+	payload, err := json.Marshal(StopPandoraReply{Ids: ids, Participants: participants})
 
 	done := make(chan bool)
 	go func() {
@@ -177,10 +178,30 @@ func TestPandora_OnStoppedReply_Ok(t *testing.T) {
 	}()
 	res, err := p.Stop("", "1")
 	assert.NoError(t, err)
-	assert.Equal(t, ids, res)
+	assert.Equal(t, Recording{Ids: ids, Participants: participants}, res)
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	<-done
+}
+
+// A Pandora that predates the participants list must still be able to stop a
+// recording : its reply simply names nobody
+func TestPandora_OnStoppedReply_WithoutParticipants(t *testing.T) {
+	pub := mockPublisher{}
+	sub := mockSubscriber{}
+	sub.On("AddTopicEventHandler", mock.Anything, mock.Anything).Return(nil)
+	pub.On("PublishEvent", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	p, err := NewPandora(&pub, &sub, "", PandoraOpt{})
+	assert.NoError(t, err)
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_, _ = p.onStoppedReply(context.Background(), &common.TopicEvent{RawData: []byte(`{"ids":["1"]}`)})
+	}()
+	res, err := p.Stop("", "1")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1"}, res.Ids)
+	assert.Empty(t, res.Participants)
 }
 
 // Pandora publishes its acks on dedicated topics : we must not subscribe to
@@ -282,8 +303,8 @@ func TestPandora_ConcurrentStopsGetTheirOwnReplies(t *testing.T) {
 		err error
 	}
 	resA, resB := make(chan result, 1), make(chan result, 1)
-	go func() { ids, err := p.Stop("", "channel-A"); resA <- result{ids, err} }()
-	go func() { ids, err := p.Stop("", "channel-B"); resB <- result{ids, err} }()
+	go func() { rec, err := p.Stop("", "channel-A"); resA <- result{rec.Ids, err} }()
+	go func() { rec, err := p.Stop("", "channel-B"); resB <- result{rec.Ids, err} }()
 
 	// Both requests are out : map each correlation id to its voice channel
 	correlationOf := map[string]string{}

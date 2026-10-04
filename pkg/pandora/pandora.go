@@ -175,7 +175,7 @@ func (p *Pandora) Start(instanceId, vcId string) error {
 	return err
 }
 
-func (p *Pandora) Stop(instanceId, vcId string) ([]string, error) {
+func (p *Pandora) Stop(instanceId, vcId string) (Recording, error) {
 	correlationId, replies := p.register(S_Ended)
 	defer p.unregister(correlationId)
 
@@ -184,10 +184,10 @@ func (p *Pandora) Stop(instanceId, vcId string) ([]string, error) {
 		CorrelationId:  correlationId,
 	})
 	if err != nil {
-		return []string{}, err
+		return Recording{}, err
 	}
 
-	var ids []string
+	var recording Recording
 	select {
 	case <-time.After(p.opt.WaitTimeout):
 		err = fmt.Errorf("[Pandora] :: Timeout, could not end recording")
@@ -195,10 +195,10 @@ func (p *Pandora) Stop(instanceId, vcId string) ([]string, error) {
 		if reply.Error != nil {
 			err = fmt.Errorf("[Pandora] :: could not end recording : %w", reply.Error)
 		} else {
-			ids = reply.Stopped.Ids
+			recording = Recording{Ids: reply.Stopped.Ids, Participants: reply.Stopped.Participants}
 		}
 	}
-	return ids, err
+	return recording, err
 }
 
 func (p *Pandora) onStoppedReply(ctx context.Context, e *common.TopicEvent) (retry bool, err error) {

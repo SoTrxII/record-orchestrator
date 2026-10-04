@@ -54,10 +54,11 @@ To stop the recording, send a request to the `stop` endpoint of the orchestrator
 grpcurl -plaintext -d '{"voiceChannelId": "your_channel_id", "roll20GameId": "your_game_id"}' localhost:50051 recorder.RecordService/Stop
 ```
 
-The response will contain the key that can be used to retrieve the recordings from the object store.
+The response will contain the key that can be used to retrieve the recordings from the object store, and the Discord
+ids of everyone heard in the recording (users who spoke at least once, not everyone who joined the voice channel).
 
 ```json
-{"discordKeys": ["discord_key1", "discord_key2"], "roll20Key": "roll20_key"}
+{"discordKeys": ["discord_key1", "discord_key2"], "roll20Key": "roll20_key", "participantIds": ["discord_user_id"]}
 ```
 
 ## Setting up the project locally

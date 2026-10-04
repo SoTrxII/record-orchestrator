@@ -22,6 +22,10 @@ message StopRecordRequest {
 message StopRecordReply {
   repeated string discordKeys = 1;
   string roll20Key = 2;
+  // Discord ids of everyone heard in the recording : users who spoke at least
+  // once, not everyone who joined the voice channel. Empty when the recorder
+  // predates this field.
+  repeated string participantIds = 3;
 }
 
 service RecordService {

@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"record-orchestrator/pkg/memory"
+	pando "record-orchestrator/pkg/pandora"
 	pb "record-orchestrator/proto"
 	test_utils "record-orchestrator/test-utils"
 	"sync"
@@ -100,7 +101,7 @@ func TestRecorderPool_StopsOnTheRightInstance(t *testing.T) {
 	assert.NoError(t, err)
 
 	ownerOfB := store.sessions()["channel-B"].InstanceId
-	pandora.On("Stop", ownerOfB, "channel-B").Return([]string{"rec-B"}, nil).Once()
+	pandora.On("Stop", ownerOfB, "channel-B").Return(pando.Recording{Ids: []string{"rec-B"}}, nil).Once()
 
 	ret, err := recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "channel-B"})
 	assert.NoError(t, err)
@@ -119,7 +120,7 @@ func TestRecorderPool_FreesInstanceOnStop(t *testing.T) {
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0"})
 	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
-	pandora.On("Stop", mock.Anything, mock.Anything).Return([]string{"rec-A"}, nil)
+	pandora.On("Stop", mock.Anything, mock.Anything).Return(pando.Recording{Ids: []string{"rec-A"}}, nil)
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.NoError(t, err)
