@@ -17,13 +17,13 @@ func (_m *MockR20Recorder) EXPECT() *MockR20Recorder_Expecter {
 	return &MockR20Recorder_Expecter{mock: &_m.Mock}
 }
 
-// Start provides a mock function with given fields: r20Id
-func (_m *MockR20Recorder) Start(r20Id string) error {
-	ret := _m.Called(r20Id)
+// Start provides a mock function with given fields: r20Id, alignTo
+func (_m *MockR20Recorder) Start(r20Id string, alignTo int64) error {
+	ret := _m.Called(r20Id, alignTo)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string) error); ok {
-		r0 = rf(r20Id)
+	if rf, ok := ret.Get(0).(func(string, int64) error); ok {
+		r0 = rf(r20Id, alignTo)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -38,13 +38,14 @@ type MockR20Recorder_Start_Call struct {
 
 // Start is a helper method to define mock.On call
 //   - r20Id string
-func (_e *MockR20Recorder_Expecter) Start(r20Id interface{}) *MockR20Recorder_Start_Call {
-	return &MockR20Recorder_Start_Call{Call: _e.mock.On("Start", r20Id)}
+//   - alignTo int64
+func (_e *MockR20Recorder_Expecter) Start(r20Id interface{}, alignTo interface{}) *MockR20Recorder_Start_Call {
+	return &MockR20Recorder_Start_Call{Call: _e.mock.On("Start", r20Id, alignTo)}
 }
 
-func (_c *MockR20Recorder_Start_Call) Run(run func(r20Id string)) *MockR20Recorder_Start_Call {
+func (_c *MockR20Recorder_Start_Call) Run(run func(r20Id string, alignTo int64)) *MockR20Recorder_Start_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		run(args[0].(string), args[1].(int64))
 	})
 	return _c
 }
@@ -54,7 +55,7 @@ func (_c *MockR20Recorder_Start_Call) Return(_a0 error) *MockR20Recorder_Start_C
 	return _c
 }
 
-func (_c *MockR20Recorder_Start_Call) RunAndReturn(run func(string) error) *MockR20Recorder_Start_Call {
+func (_c *MockR20Recorder_Start_Call) RunAndReturn(run func(string, int64) error) *MockR20Recorder_Start_Call {
 	_c.Call.Return(run)
 	return _c
 }

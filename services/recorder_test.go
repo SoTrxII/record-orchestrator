@@ -10,6 +10,7 @@ import (
 	test_utils "record-orchestrator/test-utils"
 	"sync"
 	"testing"
+	"time"
 )
 
 // A state store backed by a map, so tests exercise the real allocation logic
@@ -75,8 +76,12 @@ func TestRecorder_StartPandoraAndRoll20(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
-	pandora.On("Start", "", "1").Return(nil)
-	r20Rec.On("Start", "2").Return(nil)
+	var pandoraStarted int64
+	pandora.On("Start", "", "1").Run(func(mock.Arguments) { pandoraStarted = time.Now().UnixMilli() }).Return(nil)
+	// The jukebox is aligned on Discord's t=0, known once Pandora replied
+	r20Rec.On("Start", "2", mock.MatchedBy(func(alignTo int64) bool {
+		return alignTo >= pandoraStarted && alignTo <= time.Now().UnixMilli()
+	})).Return(nil)
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
 	assert.Equal(t, &pb.StartRecordReply{Discord: true, Roll20: true}, ret)
 	pandora.AssertExpectations(t)
@@ -95,7 +100,7 @@ func TestRecorder_StartSavesStateWhenRoll20Fails(t *testing.T) {
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
 	pandora.On("Start", "", "1").Return(nil)
-	r20Rec.On("Start", "2").Return(errors.New("roll20 is down"))
+	r20Rec.On("Start", "2", mock.AnythingOfType("int64")).Return(errors.New("roll20 is down"))
 
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
 	assert.NoError(t, err)

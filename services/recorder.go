@@ -8,6 +8,7 @@ import (
 	roll20_sync "record-orchestrator/pkg/roll20-sync"
 	pb "record-orchestrator/proto"
 	"sync"
+	"time"
 )
 
 type Recorder struct {
@@ -61,6 +62,12 @@ func (r *Recorder) Start(payload *pb.StartRecordRequest) (*pb.StartRecordReply, 
 		}
 		return nil, err
 	}
+	// The Discord recording's t=0, for roll20-audio-sync to place the jukebox
+	// audio on its timeline. Pandora only replies once its encoder is running,
+	// and that encoder's start is the cooked audio's t=0, so this is late by
+	// the reply's pub/sub latency: tens of ms, inaudible under background music.
+	// Every pod is on the same node, so the clocks agree
+	discordStart := time.Now().UnixMilli()
 	reply := pb.StartRecordReply{
 		Discord: true,
 		Roll20:  false,
@@ -70,7 +77,7 @@ func (r *Recorder) Start(payload *pb.StartRecordRequest) (*pb.StartRecordReply, 
 	// If it fails we keep the Discord recording going : the session is already
 	// committed to the state, so it can still be stopped later on
 	if payload.GetRoll20GameId() != "" {
-		if err := r.roll20Sync.Start(payload.GetRoll20GameId()); err != nil {
+		if err := r.roll20Sync.Start(payload.GetRoll20GameId(), discordStart); err != nil {
 			slog.Warn(fmt.Sprintf("[Recorder] :: Failed to start roll20 sync, continuing without it. Reason : %s", err.Error()))
 		} else {
 			reply.Roll20 = true
@@ -117,7 +124,8 @@ func (r *Recorder) Stop(payload *pb.StopRecordRequest) (*pb.StopRecordReply, err
 		return nil, err
 	}
 
-	// TODO :: Calculate offset for synchronisation
+	// No offset to hand on: roll20-audio-sync already aligned its audio on
+	// the Discord timeline (see discordStart in Start)
 	return &pb.StopRecordReply{
 		DiscordKeys:    recording.Ids,
 		Roll20Key:      r20Key,

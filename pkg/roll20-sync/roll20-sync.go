@@ -13,7 +13,8 @@ type Roll20Sync struct {
 }
 
 type payload struct {
-	Id string `json:"id"`
+	Id      string `json:"id"`
+	AlignTo int64  `json:"alignTo,omitempty"`
 }
 
 func NewRoll20Sync(client utils.Invoker, component string) *Roll20Sync {
@@ -23,19 +24,18 @@ func NewRoll20Sync(client utils.Invoker, component string) *Roll20Sync {
 	}
 }
 
-func (r *Roll20Sync) Start(r20Id string) error {
-
+func (r *Roll20Sync) Start(r20Id string, alignTo int64) error {
 	content, err := json.Marshal(payload{
-		Id: r20Id,
+		Id:      r20Id,
+		AlignTo: alignTo,
 	})
 	if err != nil {
 		return err
 	}
-	res, err := r.client.InvokeMethodWithContent(context.Background(), r.component, "v1/jukeboxsyncer/start", "POST", &utils.DataContent{
+	_, err = r.client.InvokeMethodWithContent(context.Background(), r.component, "v1/jukeboxsyncer/start", "POST", &utils.DataContent{
 		Data:        content,
 		ContentType: "application/json",
 	})
-	fmt.Printf("res: %s\n", res)
 	return err
 }
 
