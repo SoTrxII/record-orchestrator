@@ -113,6 +113,47 @@ func TestRecorderPool_StopsOnTheRightInstance(t *testing.T) {
 	assert.Contains(t, store.sessions(), "channel-A")
 }
 
+// Two games recorded at once, each with its jukebox : every session starts and
+// stops its own Roll20 capture, never the other game's
+func TestRecorderPool_TwoGamesEachWithTheirJukebox(t *testing.T) {
+	pandora := test_utils.MockDiscordRecorder{}
+	r20Rec := test_utils.MockR20Recorder{}
+	store := newFakeStore()
+	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0", "pandora-1"})
+	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	r20Rec.On("Start", "game-A", mock.Anything).Return(nil).Once()
+	r20Rec.On("Start", "game-B", mock.Anything).Return(nil).Once()
+
+	a, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A", Roll20GameId: "game-A"})
+	assert.NoError(t, err)
+	b, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-B", Roll20GameId: "game-B"})
+	assert.NoError(t, err)
+	assert.True(t, a.Roll20 && b.Roll20)
+	assert.Equal(t, "game-A", store.sessions()["channel-A"].R20Id)
+	assert.Equal(t, "game-B", store.sessions()["channel-B"].R20Id)
+
+	// B ends first : only B's capture is stopped, and B gets B's audio
+	pandora.On("Stop", store.sessions()["channel-B"].InstanceId, "channel-B").Return(pando.Recording{Ids: []string{"rec-B"}}, nil).Once()
+	r20Rec.On("Stop", "game-B").Return("game-B.ogg", nil).Once()
+	ret, err := recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "channel-B", Roll20GameId: "game-B"})
+	assert.NoError(t, err)
+	assert.Equal(t, "game-B.ogg", ret.Roll20Key)
+	r20Rec.AssertNotCalled(t, "Stop", "game-A")
+
+	// A is still recorded, and cannot be stopped with B's game
+	_, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "channel-A", Roll20GameId: "game-B"})
+	assert.Error(t, err)
+
+	pandora.On("Stop", store.sessions()["channel-A"].InstanceId, "channel-A").Return(pando.Recording{Ids: []string{"rec-A"}}, nil).Once()
+	r20Rec.On("Stop", "game-A").Return("game-A.ogg", nil).Once()
+	ret, err = recorder.Stop(&pb.StopRecordRequest{VoiceChannelId: "channel-A", Roll20GameId: "game-A"})
+	assert.NoError(t, err)
+	assert.Equal(t, "game-A.ogg", ret.Roll20Key)
+	assert.Equal(t, []string{"rec-A"}, ret.DiscordKeys)
+	pandora.AssertExpectations(t)
+	r20Rec.AssertExpectations(t)
+}
+
 // Stopping frees the bot for the next session
 func TestRecorderPool_FreesInstanceOnStop(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
