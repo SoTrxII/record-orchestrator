@@ -47,12 +47,20 @@ func (r *Roll20Sync) Stop(r20Id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = r.client.InvokeMethodWithContent(context.Background(), r.component, "v1/jukeboxsyncer/stop", "POST", &utils.DataContent{
+	res, err := r.client.InvokeMethodWithContent(context.Background(), r.component, "v1/jukeboxsyncer/stop", "POST", &utils.DataContent{
 		Data:        content,
 		ContentType: "application/json",
 	})
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s.ogg", r20Id), nil
+	// roll20-audio-sync names the file: "<id>.ogg" for the jukebox alone,
+	// "<id>.mkv" when the GM recorded the tab's picture too
+	var reply struct {
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(res, &reply); err != nil || reply.Key == "" {
+		return "", fmt.Errorf("roll20-audio-sync gave no key for %s : %q", r20Id, res)
+	}
+	return reply.Key, nil
 }

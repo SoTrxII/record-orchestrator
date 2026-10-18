@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type recordingInvoker struct{ method, body string }
+type recordingInvoker struct{ method, body, reply string }
 
 func (i *recordingInvoker) InvokeMethodWithContent(_ context.Context, _, method, _ string, c *utils.DataContent) ([]byte, error) {
 	i.method, i.body = method, string(c.Data)
-	return nil, nil
+	return []byte(i.reply), nil
 }
 
 func TestStart_SendsTheDiscordStart(t *testing.T) {
@@ -22,8 +22,16 @@ func TestStart_SendsTheDiscordStart(t *testing.T) {
 	assert.JSONEq(t, `{"id":"123","alignTo":1712345678901}`, inv.body)
 }
 
+// The key is roll20-audio-sync's: .mkv when the tab's picture was recorded
 func TestStop_ReturnsTheUploadedKey(t *testing.T) {
-	key, err := NewRoll20Sync(&recordingInvoker{}, "roll20-audio-sync").Stop("123")
-	assert.NoError(t, err)
-	assert.Equal(t, "123.ogg", key)
+	for _, key := range []string{"123.ogg", "video/123.mkv"} {
+		got, err := NewRoll20Sync(&recordingInvoker{reply: `{"key":"` + key + `"}`}, "roll20-audio-sync").Stop("123")
+		assert.NoError(t, err)
+		assert.Equal(t, key, got)
+	}
+}
+
+func TestStop_FailsWithoutAKey(t *testing.T) {
+	_, err := NewRoll20Sync(&recordingInvoker{reply: ""}, "roll20-audio-sync").Stop("123")
+	assert.Error(t, err)
 }
