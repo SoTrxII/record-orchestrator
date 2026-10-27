@@ -42,7 +42,7 @@ func TestPandora_OnStartedReply_Ok(t *testing.T) {
 	p, err := NewPandora(&pub, &sub, "", PandoraOpt{})
 	assert.NoError(t, err)
 
-	payload, err := json.Marshal(StartPandoraReply{VoiceChannelId: "1"})
+	payload, err := json.Marshal(StartPandoraReply{VoiceChannelId: "1", StartedAt: 1712345678901})
 	assert.NoError(t, err)
 	done := make(chan bool)
 	go func() {
@@ -54,10 +54,11 @@ func TestPandora_OnStartedReply_Ok(t *testing.T) {
 			done <- true
 		}
 	}()
-	err = p.Start("", "1")
+	startedAt, err := p.Start("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.NoError(t, err)
+	assert.Equal(t, int64(1712345678901), startedAt, "the record's t=0, as Pandora took it")
 	<-done
 }
 
@@ -79,7 +80,7 @@ func TestPandora_OnStartedReply_WrongReply(t *testing.T) {
 			done <- true
 		}
 	}()
-	err = p.Start("", "1")
+	_, err = p.Start("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.Error(t, err)
@@ -102,7 +103,7 @@ func TestPandora_OnStartedReply_Timeout(t *testing.T) {
 			assert.Error(t, err)
 		}
 	}()
-	err = p.Start("", "1")
+	_, err = p.Start("", "1")
 	pub.AssertExpectations(t)
 	sub.AssertExpectations(t)
 	assert.Error(t, err)
@@ -258,7 +259,8 @@ func TestPandora_LateReplyIsNotReusedByNextRequest(t *testing.T) {
 	}
 
 	// That stale reply must not satisfy the next request
-	assert.Error(t, p.Start("", "2"), "a stale reply was mistaken for this request's ack")
+	_, err = p.Start("", "2")
+	assert.Error(t, err, "a stale reply was mistaken for this request's ack")
 }
 
 // A start ack must never be consumed by a pending stop request
@@ -409,7 +411,7 @@ func TestPandora_PublishesOnTheTargetedInstanceTopic(t *testing.T) {
 	p, err := NewPandora(&pub, &sub, "", PandoraOpt{WaitTimeout: 100 * time.Millisecond})
 	assert.NoError(t, err)
 
-	_ = p.Start("pandora-1", "channel-A")
+	_, _ = p.Start("pandora-1", "channel-A")
 	assert.Equal(t, "startRecordingDiscord-pandora-1", <-topics)
 
 	_, _ = p.Stop("pandora-2", "channel-B")

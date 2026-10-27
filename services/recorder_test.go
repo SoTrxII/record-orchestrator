@@ -59,7 +59,7 @@ func TestRecorder_StartOnlyPandora(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	mem := test_utils.MockStateStore{}
 	recorder := NewRecorder(&pandora, &r20Rec, &mem, nil)
-	pandora.On("Start", "", "1").Return(nil)
+	pandora.On("Start", "", "1").Return(int64(0), nil)
 	mem.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
 	mem.EXPECT().Get(mock.Anything).Return(nil, nil)
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1"})
@@ -77,8 +77,9 @@ func TestRecorder_StartPandoraAndRoll20(t *testing.T) {
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
 	var pandoraStarted int64
-	pandora.On("Start", "", "1").Run(func(mock.Arguments) { pandoraStarted = time.Now().UnixMilli() }).Return(nil)
-	// The jukebox is aligned on Discord's t=0, known once Pandora replied
+	pandora.On("Start", "", "1").Run(func(mock.Arguments) { pandoraStarted = time.Now().UnixMilli() }).Return(int64(0), nil)
+	// A Pandora older than 3.3.0 sends no t=0: the jukebox is aligned on when
+	// it replied
 	r20Rec.On("Start", "2", mock.MatchedBy(func(alignTo int64) bool {
 		return alignTo >= pandoraStarted && alignTo <= time.Now().UnixMilli()
 	})).Return(nil)
@@ -92,6 +93,19 @@ func TestRecorder_StartPandoraAndRoll20(t *testing.T) {
 	}
 }
 
+// The jukebox is aligned on the t=0 Pandora sends, not on when its reply came:
+// that was 535 ms late on 2026-10-26
+func TestRecorder_AlignsTheJukeboxOnPandorasStart(t *testing.T) {
+	pandora := test_utils.MockDiscordRecorder{}
+	r20Rec := test_utils.MockR20Recorder{}
+	recorder := NewRecorder(&pandora, &r20Rec, newFakeStore(), nil)
+	pandora.On("Start", "", "1").Return(int64(1712345678901), nil)
+	r20Rec.On("Start", "2", int64(1712345678901)).Return(nil)
+	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})
+	assert.NoError(t, err)
+	r20Rec.AssertExpectations(t)
+}
+
 // A failing roll20 sync must not prevent the recording state from being saved :
 // Pandora is recording, so the orchestrator has to remember it
 func TestRecorder_StartSavesStateWhenRoll20Fails(t *testing.T) {
@@ -99,7 +113,7 @@ func TestRecorder_StartSavesStateWhenRoll20Fails(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
-	pandora.On("Start", "", "1").Return(nil)
+	pandora.On("Start", "", "1").Return(int64(0), nil)
 	r20Rec.On("Start", "2", mock.AnythingOfType("int64")).Return(errors.New("roll20 is down"))
 
 	ret, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "1", Roll20GameId: "2"})

@@ -55,7 +55,8 @@ func (r *Recorder) Start(payload *pb.StartRecordRequest) (*pb.StartRecordReply, 
 		return nil, err
 	}
 
-	if err := r.pandora.Start(instanceId, payload.VoiceChannelId); err != nil {
+	discordStart, err := r.pandora.Start(instanceId, payload.VoiceChannelId)
+	if err != nil {
 		// Nothing is recording, hand the instance back to the pool
 		if releaseErr := r.release(payload.VoiceChannelId); releaseErr != nil {
 			slog.Error(fmt.Sprintf("[Recorder] :: Failed to release instance %q after a failed start : %s", instanceId, releaseErr.Error()))
@@ -63,11 +64,14 @@ func (r *Recorder) Start(payload *pb.StartRecordRequest) (*pb.StartRecordReply, 
 		return nil, err
 	}
 	// The Discord recording's t=0, for roll20-audio-sync to place the jukebox
-	// audio on its timeline. Pandora only replies once its encoder is running,
-	// and that encoder's start is the cooked audio's t=0, so this is late by
-	// the reply's pub/sub latency: tens of ms, inaudible under background music.
-	// Every pod is on the same node, so the clocks agree
-	discordStart := time.Now().UnixMilli()
+	// audio on its timeline: Pandora sends the instant its audio is timed from.
+	// Our own clock when it replies is the fallback for a Pandora older than
+	// 3.3.0. It was 535 ms late on 2026-10-26, Pandora posting its Discord
+	// message and saving its state before replying, and the music and picture
+	// played that much early. Every pod is on the same node, so the clocks agree
+	if discordStart == 0 {
+		discordStart = time.Now().UnixMilli()
+	}
 	reply := pb.StartRecordReply{
 		Discord: true,
 		Roll20:  false,

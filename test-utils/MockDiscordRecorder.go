@@ -22,17 +22,27 @@ func (_m *MockDiscordRecorder) EXPECT() *MockDiscordRecorder_Expecter {
 }
 
 // Start provides a mock function with given fields: instanceId, vcId
-func (_m *MockDiscordRecorder) Start(instanceId string, vcId string) error {
+func (_m *MockDiscordRecorder) Start(instanceId string, vcId string) (int64, error) {
 	ret := _m.Called(instanceId, vcId)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+	var r0 int64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string) (int64, error)); ok {
+		return rf(instanceId, vcId)
+	}
+	if rf, ok := ret.Get(0).(func(string, string) int64); ok {
 		r0 = rf(instanceId, vcId)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(int64)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(instanceId, vcId)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockDiscordRecorder_Start_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Start'
@@ -54,12 +64,12 @@ func (_c *MockDiscordRecorder_Start_Call) Run(run func(instanceId string, vcId s
 	return _c
 }
 
-func (_c *MockDiscordRecorder_Start_Call) Return(_a0 error) *MockDiscordRecorder_Start_Call {
-	_c.Call.Return(_a0)
+func (_c *MockDiscordRecorder_Start_Call) Return(_a0 int64, _a1 error) *MockDiscordRecorder_Start_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockDiscordRecorder_Start_Call) RunAndReturn(run func(string, string) error) *MockDiscordRecorder_Start_Call {
+func (_c *MockDiscordRecorder_Start_Call) RunAndReturn(run func(string, string) (int64, error)) *MockDiscordRecorder_Start_Call {
 	_c.Call.Return(run)
 	return _c
 }

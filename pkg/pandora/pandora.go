@@ -153,7 +153,7 @@ func RequestTopic(topic, instanceId string) string {
 }
 
 // Start a new recording session on one instance of the pool
-func (p *Pandora) Start(instanceId, vcId string) error {
+func (p *Pandora) Start(instanceId, vcId string) (int64, error) {
 	correlationId, replies := p.register(S_Started)
 	defer p.unregister(correlationId)
 
@@ -162,17 +162,20 @@ func (p *Pandora) Start(instanceId, vcId string) error {
 		CorrelationId:  correlationId,
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	var startedAt int64
 	select {
 	case <-time.After(p.opt.WaitTimeout):
 		err = fmt.Errorf("[Pandora] :: Timeout during initialization, could not start recording")
 	case reply := <-replies:
 		if reply.Error != nil {
 			err = fmt.Errorf("[Pandora] :: error during initialization, could not start recording : %w", reply.Error)
+		} else {
+			startedAt = reply.Started.StartedAt
 		}
 	}
-	return err
+	return startedAt, err
 }
 
 func (p *Pandora) Stop(instanceId, vcId string) (Recording, error) {

@@ -1,7 +1,9 @@
 package pandora
 
 type DiscordRecorder interface {
-	Start(instanceId, vcId string) error
+	// Start returns the Unix ms of the recording's t=0, as Pandora took it. 0
+	// from a Pandora older than 3.3.0, which doesn't send it
+	Start(instanceId, vcId string) (int64, error)
 	Stop(instanceId, vcId string) (Recording, error)
 }
 
@@ -41,6 +43,8 @@ type StartPandoraRequest struct {
 type StartPandoraReply struct {
 	VoiceChannelId string `json:"voiceChannelId"`
 	CorrelationId  string `json:"correlationId"`
+	// Unix ms of the record's t=0. Absent (0) from a Pandora older than 3.3.0
+	StartedAt int64 `json:"startedAt"`
 }
 
 type StopPandoraRequest struct {

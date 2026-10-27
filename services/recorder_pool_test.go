@@ -19,7 +19,7 @@ func TestRecorderPool_SpreadsSessionsOverInstances(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0", "pandora-1"})
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.NoError(t, err)
@@ -41,7 +41,7 @@ func TestRecorderPool_RefusesWhenExhausted(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0"})
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.NoError(t, err)
@@ -58,7 +58,7 @@ func TestRecorderPool_RefusesTheSameChannelTwice(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0", "pandora-1"})
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.NoError(t, err)
@@ -75,14 +75,14 @@ func TestRecorderPool_ReleasesInstanceOnFailedStart(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0"})
-	pandora.On("Start", "pandora-0", "channel-A").Return(errors.New("pandora is down")).Once()
+	pandora.On("Start", "pandora-0", "channel-A").Return(int64(0), errors.New("pandora is down")).Once()
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.Error(t, err)
 	assert.Empty(t, store.sessions(), "the failed session was left holding a bot")
 
 	// The only bot of the pool is free again
-	pandora.On("Start", "pandora-0", "channel-B").Return(nil).Once()
+	pandora.On("Start", "pandora-0", "channel-B").Return(int64(0), nil).Once()
 	_, err = recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-B"})
 	assert.NoError(t, err)
 }
@@ -93,7 +93,7 @@ func TestRecorderPool_StopsOnTheRightInstance(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0", "pandora-1"})
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.NoError(t, err)
@@ -120,7 +120,7 @@ func TestRecorderPool_TwoGamesEachWithTheirJukebox(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0", "pandora-1"})
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 	r20Rec.On("Start", "game-A", mock.Anything).Return(nil).Once()
 	r20Rec.On("Start", "game-B", mock.Anything).Return(nil).Once()
 
@@ -160,7 +160,7 @@ func TestRecorderPool_FreesInstanceOnStop(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0"})
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 	pandora.On("Stop", mock.Anything, mock.Anything).Return(pando.Recording{Ids: []string{"rec-A"}}, nil)
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
@@ -179,7 +179,7 @@ func TestRecorderPool_ConcurrentStartsNeverShareAnInstance(t *testing.T) {
 	store := newFakeStore()
 	pool := []string{"pandora-0", "pandora-1", "pandora-2", "pandora-3"}
 	recorder := NewRecorder(&pandora, &r20Rec, store, pool)
-	pandora.On("Start", mock.Anything, mock.Anything).Return(nil)
+	pandora.On("Start", mock.Anything, mock.Anything).Return(int64(0), nil)
 
 	channels := []string{"channel-A", "channel-B", "channel-C", "channel-D"}
 	var wg sync.WaitGroup
@@ -211,7 +211,7 @@ func TestRecorderPool_UnnamedInstanceByDefault(t *testing.T) {
 	r20Rec := test_utils.MockR20Recorder{}
 	store := newFakeStore()
 	recorder := NewRecorder(&pandora, &r20Rec, store, nil)
-	pandora.On("Start", "", "channel-A").Return(nil).Once()
+	pandora.On("Start", "", "channel-A").Return(int64(0), nil).Once()
 
 	_, err := recorder.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-A"})
 	assert.NoError(t, err)
@@ -236,7 +236,7 @@ func TestRecorderPool_RecoversBusyInstancesFromState(t *testing.T) {
 	pandora := test_utils.MockDiscordRecorder{}
 	r20Rec := test_utils.MockR20Recorder{}
 	revived := NewRecorder(&pandora, &r20Rec, store, []string{"pandora-0", "pandora-1"})
-	pandora.On("Start", "pandora-1", "channel-B").Return(nil).Once()
+	pandora.On("Start", "pandora-1", "channel-B").Return(int64(0), nil).Once()
 
 	_, err := revived.Start(&pb.StartRecordRequest{VoiceChannelId: "channel-B"})
 	assert.NoError(t, err)
